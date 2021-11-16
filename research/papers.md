@@ -3,32 +3,33 @@
 ## World Models
 
 - [World Models](https://arxiv.org/abs/1803.10122), [Website](https://worldmodels.github.io/)
-- [Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model](https://arxiv.org/abs/1911.08265)
-- [Mastering Atari with Discrete World Models](https://arxiv.org/abs/2010.02193)
-- [Dream to Control: Learning Behaviors by Latent Imagination](https://arxiv.org/abs/1912.01603)
+- MuZero: [Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model](https://arxiv.org/abs/1911.08265)
+- MuZero ReAnalyse [Online and Offline Reinforcement Learning by Planning with a Learned Model](https://arxiv.org/abs/2104.06294)
+- Sampled MuZero: [Learning and Planning in Complex Action Spaces](https://arxiv.org/abs/2104.06303)
+- EfficientZero: [Mastering Atari Games with Limited Data](https://arxiv.org/abs/2111.00210)
+- DreamerV2: [Mastering Atari with Discrete World Models](https://arxiv.org/abs/2010.02193)
+- Dreamer: [Dream to Control: Learning Behaviors by Latent Imagination](https://arxiv.org/abs/1912.01603)
 - [Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615), [Video](https://sites.google.com/view/vqmodels/home)
 - [Procedural Generalization by Planning with Self-Supervised World Models](https://arxiv.org/abs/2111.01587)
 - [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)
 - [Smaller World Models for Reinforcement Learning](https://arxiv.org/abs/2010.05767)
-- [Learning and Planning in Complex Action Spaces](https://arxiv.org/abs/2104.06303)
-- [Online and Offline Reinforcement Learning by Planning with a Learned Model](https://arxiv.org/abs/2104.06294)
 - [Learning to drive from a world on rails](https://arxiv.org/abs/2105.00636)
-- [Learning to Simulate Dynamic Environments with GameGAN](https://arxiv.org/abs/2005.12126), [Website](https://nv-tlabs.github.io/gameGAN/)
-- [DriveGAN: Towards a Controllable High-Quality Neural Simulation](https://arxiv.org/abs/2104.15060), [Website](https://nv-tlabs.github.io/DriveGAN/)
+- GameGAN: [Learning to Simulate Dynamic Environments with GameGAN](https://arxiv.org/abs/2005.12126), [Website](https://nv-tlabs.github.io/gameGAN/)
+- DriveGAN: [DriveGAN: Towards a Controllable High-Quality Neural Simulation](https://arxiv.org/abs/2104.15060), [Website](https://nv-tlabs.github.io/DriveGAN/)
 
 
 ## Video prediction
 
-- [VideoGPT: Video Generation using VQ-VAE and Transformers](https://arxiv.org/abs/2104.10157)
-- [FitVid: Overfitting in Pixel-Level Video Prediction](https://arxiv.org/abs/2106.13195)
+- VideoGPT: [VideoGPT: Video Generation using VQ-VAE and Transformers](https://arxiv.org/abs/2104.10157)
+- FitVid: [FitVid: Overfitting in Pixel-Level Video Prediction](https://arxiv.org/abs/2106.13195)
 - [Predicting Video with VQVAE](https://arxiv.org/abs/2103.01950)
 - [Clockwork Variational Autoencoders](https://arxiv.org/abs/2102.09532)
 
 
 ## Important Related Papers
-- [Generating Diverse High-Fidelity Images with VQ-VAE-2](https://arxiv.org/abs/1906.00446)
-- [PixelSNAIL: An Improved Autoregressive Generative Model](https://arxiv.org/abs/1712.09763)
-- [Taming Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2012.09841), [Website](https://compvis.github.io/taming-transformers/)
+- VQ-VAE-2: [Generating Diverse High-Fidelity Images with VQ-VAE-2](https://arxiv.org/abs/1906.00446)
+- PixelSNAIL: [PixelSNAIL: An Improved Autoregressive Generative Model](https://arxiv.org/abs/1712.09763)
+- VQGAN: [Taming Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2012.09841), [Website](https://compvis.github.io/taming-transformers/)
 
 
 ## Interesting Other Stuff
