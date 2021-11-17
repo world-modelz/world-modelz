@@ -128,9 +128,5 @@ def test_rgb_som():
             torchvision.utils.save_image(img, 'test{0}.png'.format(i))
 
 
-def main():
-    test_rgb_som()
-
-
 if __name__ == '__main__':
-    main()
+    test_rgb_som()

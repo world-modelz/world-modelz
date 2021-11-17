@@ -16,6 +16,7 @@
 - [Learning to drive from a world on rails](https://arxiv.org/abs/2105.00636)
 - GameGAN: [Learning to Simulate Dynamic Environments with GameGAN](https://arxiv.org/abs/2005.12126), [Website](https://nv-tlabs.github.io/gameGAN/)
 - DriveGAN: [DriveGAN: Towards a Controllable High-Quality Neural Simulation](https://arxiv.org/abs/2104.15060), [Website](https://nv-tlabs.github.io/DriveGAN/)
+- OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 
 
 ## Video prediction
@@ -35,3 +36,11 @@
 
 ## Interesting Other Stuff
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
+- Blog: [Debugging Deep Model-based Reinforcement Learning Systems](https://www.natolambert.com/writing/debugging-mbrl)
+
+
+## Acknowledgements
+
+I would like to thank the following people for suggesting papers and links:
+- eop
+- Alexander Nikolin
