@@ -56,6 +56,9 @@ def train_som(opt, model, device, data_loader, max_epochs=10, wandb_log_interval
     initial_sigma = model.som.width / 2
     initial_alpha = 0.85
 
+    final_sigma = 1.0
+    exp_decay_scale = math.log(final_sigma/initial_sigma)
+
     step = 1
     for epoch in range(max_epochs):
         print('Epoch: {}'.format(epoch))
@@ -68,9 +71,9 @@ def train_som(opt, model, device, data_loader, max_epochs=10, wandb_log_interval
             # convert inputs from BCHW -> BHWC
             h = h.permute(0, 2, 3, 1).contiguous()
 
-            progress = (step-1)/T   # linear from 0 to 1
-            alpha = initial_alpha * (1.0 - progress)        # learning rate: linear decay
-            sigma = initial_sigma * math.exp(-progress)     # radius: exponential decay
+            progress = (step-1)/T   # increases linearly from 0 to 1
+            alpha = initial_alpha * (1.0 - progress)    # learning rate: linear decay
+            sigma = initial_sigma * math.exp(progress * exp_decay_scale)    # radius: exponential decay
 
             som_error = model.som.adapt(h, alpha, sigma, adapt_batch_size=64, stats=True)
 
