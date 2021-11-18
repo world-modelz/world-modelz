@@ -17,6 +17,7 @@
 - GameGAN: [Learning to Simulate Dynamic Environments with GameGAN](https://arxiv.org/abs/2005.12126), [Website](https://nv-tlabs.github.io/gameGAN/)
 - DriveGAN: [DriveGAN: Towards a Controllable High-Quality Neural Simulation](https://arxiv.org/abs/2104.15060), [Website](https://nv-tlabs.github.io/DriveGAN/)
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
+- AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
 
 
 ## Video prediction
@@ -27,7 +28,14 @@
 - [Clockwork Variational Autoencoders](https://arxiv.org/abs/2102.09532)
 
 
+## RL
+
+- relational unit (self-attention): [Relational Deep Reinforcement Learning](https://arxiv.org/abs/1806.01830)
+- XLand: [Open-Ended Learning Leads to Generally Capable Agents](https://arxiv.org/abs/2107.12808), [Blog](https://deepmind.com/blog/article/generally-capable-agents-emerge-from-open-ended-play), [Video](https://youtu.be/lTmL7jwFfdw)
+
+
 ## Important Related Papers
+
 - VQ-VAE-2: [Generating Diverse High-Fidelity Images with VQ-VAE-2](https://arxiv.org/abs/1906.00446), code: [rosinality/vq-vae-2-pytorch](https://github.com/rosinality/vq-vae-2-pytorch)
 - PixelCNN: [Conditional Image Generation with PixelCNN Decoders](https://arxiv.org/abs/1606.05328)
 - PixelSNAIL: [PixelSNAIL: An Improved Autoregressive Generative Model](https://arxiv.org/abs/1712.09763)
@@ -35,6 +43,7 @@
 
 
 ## Interesting Other Stuff
+
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
 - Blog: [Debugging Deep Model-based Reinforcement Learning Systems](https://www.natolambert.com/writing/debugging-mbrl)
 
