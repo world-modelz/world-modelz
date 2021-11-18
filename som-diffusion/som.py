@@ -29,7 +29,7 @@ class SomLayer(nn.Module):
         assert(input.size(-1) == self.embedding_dim)
 
         # flatten input
-        flat_input = input.view(-1, self.embedding_dim)
+        flat_input = input.reshape(-1, self.embedding_dim)
 
         # calculate distances (squared)
         # broadcasting variant requires more memory than matmul version
@@ -65,7 +65,7 @@ class SomLayer(nn.Module):
     def adapt(self, x, alpha, sigma, adapt_batch_size=256, stats=True):
         assert(x.size(-1) == self.embedding_dim)
 
-        flat_input = x.view(-1, self.embedding_dim)
+        flat_input = x.reshape(-1, self.embedding_dim)
         num_flat_inputs = flat_input.size(0)
 
         error_sum = torch.tensor(0.0, device=x.device)

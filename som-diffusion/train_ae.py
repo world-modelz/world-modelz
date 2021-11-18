@@ -1,5 +1,6 @@
 import os, glob, re
 import argparse
+import uuid
 
 import torch
 import torch.nn as nn
@@ -41,23 +42,24 @@ class SomAutoEncoder(nn.Module):
             h = self.som.forward(h)
 
             # convert quantized from BHWC -> BCHW
-            h = h.permute(0, 3, 1, 2)
+            h = h.permute(0, 3, 1, 2).contiguous()
 
         return self.decoder(h)
 
 
-def parse_args():
-    # parse bool args correctly, see https://stackoverflow.com/a/43357954
-    def str2bool(v):
-        if isinstance(v, bool):
-            return v
-        if v.lower() in ('yes', 'true', 't', 'y', '1'):
-            return True
-        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-            return False
-        else:
-            raise argparse.ArgumentTypeError('Boolean value expected.')
+# parse bool args correctly, see https://stackoverflow.com/a/43357954
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
+
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str, help='device to use')
     parser.add_argument('--device-index', default=1, type=int, help='device index')
@@ -77,8 +79,10 @@ def parse_args():
     parser.add_argument('--checkpoint_interval', default=2500, type=int)
 
     parser.add_argument('--wandb', default=False, action='store_true')
+    parser.add_argument('--entity', default='andreaskoepf', type=str)
     parser.add_argument('--tags', default=None, type=str)
-    parser.add_argument('--project', default='som-ae', type=str, help='project name for wandb')
+    parser.add_argument('--project', default='som-diffusion', type=str, help='project name for wandb')
+    parser.add_argument('--name', default='ae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
 
     opt = parser.parse_args()
     return opt
@@ -206,6 +210,20 @@ def count_parameters(module):
         sum([p.data.nelement() for p in module.parameters()])))
 
 
+def wandb_init(opt):
+    if opt.wandb:
+        wandb_mode = 'online'
+        wandb.login()
+    else:
+        wandb_mode = 'disabled'
+
+    tags = []
+    if opt.tags is not None:
+        tags.extend(opt.tags.split(','))
+
+    wandb.init(project=opt.project, entity=opt.entity, config=vars(opt), tags=tags, mode=wandb_mode, name=opt.name)
+
+
 def main():
     print('Using pytorch version {}'.format(torch.__version__))
 
@@ -220,19 +238,8 @@ def main():
     torch.manual_seed(opt.manual_seed)
 
     # weights and biases
-    if opt.wandb:
-        wandb_mode = 'online'
-        wandb.login()
-    else:
-        wandb_mode = 'disabled'
-
-    tags = []
-    if opt.tags is not None:
-        tags.extend(opt.tags.split(','))
-
-    wandb.init(project=opt.project, entity='andreaskoepf', config=vars(opt), tags=tags, mode=wandb_mode)
-
-
+    wandb_init(opt)
+    
     embedding_dim = opt.embedding_dim
     downscale_steps = opt.downscale_steps
     batch_size = opt.batch_size
@@ -278,7 +285,7 @@ def main():
     else:
         raise RuntimeError('Unsupported loss function type specified.')
 
-    train(opt.project, model, loss_fn, device, data_loader, optimizer, lr_scheduler, opt.checkpoint_interval)
+    train(opt.name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, opt.checkpoint_interval)
 
 
 if __name__ == '__main__':
