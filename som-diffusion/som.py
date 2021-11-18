@@ -4,7 +4,7 @@ import torchvision
 
 
 class SomLayer(nn.Module):
-    def __init__(self, width, height, embedding_dim, commitment_cost=0.25):
+    def __init__(self, width, height, embedding_dim):
         super(SomLayer, self).__init__()
 
         assert(width > 0 and height > 0)
