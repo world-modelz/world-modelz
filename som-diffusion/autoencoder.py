@@ -138,9 +138,9 @@ class SimpleResidualDecoder(nn.Module):
         upsample = functools.partial(F.interpolate, scale_factor=2, mode='bilinear', align_corners=False)
 
         layers = [conv3x3(in_channels, in_channels)]
-        for out_channels in cfg:
-            layers += [UpscaleResidual(in_channels, out_channels, upsample)]
-            in_channels = out_channels
+        for hidden_channels in cfg:
+            layers += [UpscaleResidual(in_channels, hidden_channels, upsample)]
+            in_channels = hidden_channels
 
         # add output mapping
         layers += [conv3x3(in_channels, out_channels)]
