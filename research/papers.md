@@ -10,7 +10,7 @@
 - [Procedural Generalization by Planning with Self-Supervised World Models](https://arxiv.org/abs/2111.01587)  (planning, self-supervised learning, data diversity)
 - DreamerV2: [Mastering Atari with Discrete World Models](https://arxiv.org/abs/2010.02193)
 - Dreamer: [Dream to Control: Learning Behaviors by Latent Imagination](https://arxiv.org/abs/1912.01603)
-- [Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615), [Video](https://sites.google.com/view/vqmodels/home)
+- VQM: [Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615), [Video](https://sites.google.com/view/vqmodels/home)
 - PlaNet/RSSM: [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)
 - [Smaller World Models for Reinforcement Learning](https://arxiv.org/abs/2010.05767)
 - [Learning to drive from a world on rails](https://arxiv.org/abs/2105.00636)

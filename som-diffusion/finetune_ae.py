@@ -37,14 +37,14 @@ class SomAutoEncoder(nn.Module):
         if self.pass_through_som:
             
             # convert inputs from BCHW -> BHWC
-            h = h.permute(0, 2, 3, 1)
+            h_in = h.permute(0, 2, 3, 1)
 
-            h = self.som.forward(h)
+            h, h_diff = self.som.forward(h_in)
 
             # convert quantized from BHWC -> BCHW
             h = h.permute(0, 3, 1, 2).contiguous()
 
-        return self.decoder(h)
+        return self.decoder(h), h_in, h_diff
 
 
 # parse bool args correctly, see https://stackoverflow.com/a/43357954
@@ -81,8 +81,10 @@ def parse_args():
     parser.add_argument('--wandb', default=False, action='store_true')
     parser.add_argument('--entity', default='andreaskoepf', type=str)
     parser.add_argument('--tags', default=None, type=str)
-    parser.add_argument('--project', default='som-diffusion', type=str, help='project name for wandb')
-    parser.add_argument('--name', default='ae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+    parser.add_argument('--project', default='finetune_ae', type=str, help='project name for wandb')
+    parser.add_argument('--name', default='finetune_ae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+
+    parser.add_argument('--som_checkpoint', default='experiments/som_2b_som_checkpoint_0010000.pth', type=str)
 
     opt = parser.parse_args()
     return opt
@@ -153,8 +155,14 @@ def show_and_save(fn, reconstructions, show=True, save=True):
         torchvision.utils.save_image(reconstructions, fn)
 
 
-def train(experiment_name, model, losss_fn, device, data_loader, optimizer, lr_scheduler, checkpoint_interval=2500, max_epochs=10, wandb_log_interval=1000):
+def train(experiment_name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, checkpoint_interval=2500, max_epochs=10, wandb_log_interval=1000):
     plt.ion()
+
+    som_adapt_rate = 0.02
+    som_adapt_radius = 0.25
+    som_adapt_batch = 8
+
+    latent_loss_factor = 0.25
 
     train_recon_error = []
     step = 1
@@ -166,11 +174,10 @@ def train(experiment_name, model, losss_fn, device, data_loader, optimizer, lr_s
 
             batch = batch.to(device)
 
-            reconstruction, _, _ = model(batch)
-            loss = losss_fn(reconstruction, batch)
-
-            wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0]})
-            print('step: {}; loss: {}; lr: {}; epoch: {};'.format(step, loss.item(), lr_scheduler.get_last_lr()[0], epoch))
+            reconstruction, h_in, h_diff = model(batch)
+            r_loss = loss_fn(reconstruction, batch)
+            h_loss = h_diff
+            loss = r_loss + latent_loss_factor * h_loss 
 
             train_recon_error.append(loss.item())
 
@@ -178,6 +185,11 @@ def train(experiment_name, model, losss_fn, device, data_loader, optimizer, lr_s
             loss.backward()
             optimizer.step()
 
+            som_loss = model.som.adapt(h_in, som_adapt_rate, som_adapt_radius, som_adapt_batch)
+
+            wandb.log({'loss': loss.item(), 'r_loss': r_loss, 'h_loss': h_loss, 'som_loss': som_loss, 'lr': lr_scheduler.get_last_lr()[0]})
+            print('step: {}; loss: {} (h: {}); lr: {}; epoch: {};'.format(step, loss.item(), h_loss.item(), lr_scheduler.get_last_lr()[0], epoch))
+            
             if step % checkpoint_interval == 0:
                 # write model_checkpoint
                 fn = '{}_checkpoint_{:07d}.pth'.format(experiment_name, step)
@@ -239,13 +251,22 @@ def main():
 
     # weights and biases
     wandb_init(opt)
-    
-    embedding_dim = opt.embedding_dim
-    downscale_steps = opt.downscale_steps
+
     batch_size = opt.batch_size
     learning_rate = opt.lr
+    experiment_name = opt.name
+    optimizer_name = opt.optimizer
+    loss_fn_name = opt.loss_fn
 
+    print('loading SOM checkpoint: ', opt.som_checkpoint)
+    checkpoint_data = torch.load(opt.som_checkpoint, map_location=device)
+    
+    # use checkpoint options
+    opt = checkpoint_data['opt']
 
+    embedding_dim = opt.embedding_dim
+    downscale_steps = opt.downscale_steps
+    
     # data loader
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -256,8 +277,9 @@ def main():
         return default_collate(batch)
     data_loader = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=remove_none_collate, num_workers=4)
 
-    model = SomAutoEncoder(embedding_dim=embedding_dim, downscale_steps=downscale_steps, pass_through_som=False)
-    
+    model = SomAutoEncoder(embedding_dim=embedding_dim, downscale_steps=downscale_steps, pass_through_som=True)
+    model.load_state_dict(checkpoint_data['model_state_dict'])
+
     test_batch = torch.rand(1, 3, 64, 64)
     test_latent = model.encoder(test_batch)
     print('latent size: ', test_latent.shape)
@@ -266,26 +288,25 @@ def main():
     
     model.to(device)
 
-    if opt.optimizer == 'AdamW':
+    if optimizer_name == 'AdamW':
         optimizer = optim.AdamW(model.parameters(), lr=learning_rate, amsgrad=False)
-    elif opt.optimizer == 'Adam':
+    elif optimizer_name == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=False)
     else:
         raise RuntimeError('Unsupported optimizer specified.')
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.5)
 
-            
-    if opt.loss_fn == 'SmoothL1':
-        loss_fn = torch.nn.SmoothL1Loss(reduction='sum')
-    elif opt.loss_fn == 'MSE':
-        loss_fn = torch.nn.MSELoss(reduction='sum')
-    elif opt.loss_fn == 'MAE' or opt.loss_fn == 'L1':
-        loss_fn = torch.nn.L1Loss(reduction='sum')
+    if loss_fn_name == 'SmoothL1':
+        loss_fn = torch.nn.SmoothL1Loss(reduction='mean')
+    elif loss_fn_name == 'MSE':
+        loss_fn = torch.nn.MSELoss(reduction='mean')
+    elif loss_fn_name== 'MAE' or loss_fn_name == 'L1':
+        loss_fn = torch.nn.L1Loss(reduction='mean')
     else:
         raise RuntimeError('Unsupported loss function type specified.')
 
-    train(opt.name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, opt.checkpoint_interval)
+    train(experiment_name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, opt.checkpoint_interval)
 
 
 if __name__ == '__main__':

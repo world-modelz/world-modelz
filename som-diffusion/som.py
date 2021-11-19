@@ -51,7 +51,8 @@ class SomLayer(nn.Module):
         bmu_indices = self.encode(input)
         quantized = self.decode(bmu_indices)
         quantized = input + (quantized - input).detach()    # pass through gradient
-        return quantized
+        diff = (quantized.detach() - input).pow(2).mean()
+        return quantized, diff
 
     def add_stats(self, bmu_indices):
         bmu_indices = bmu_indices.view(-1)
