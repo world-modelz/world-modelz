@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import wandb
 
+from som import SomLayer
 from train_ae import SomAutoEncoder, load_file_list, FileListImageDataset, show_and_save, count_parameters, wandb_init
 
 
@@ -31,6 +32,9 @@ def parse_args():
     parser.add_argument('--image_fn_regex', default='.*\.png$', type=str)
     parser.add_argument('--checkpoint_interval', default=2000, type=int)
     
+    parser.add_argument('--som_width', default=None, type=int, help='rebuild SOM layer with width')
+    parser.add_argument('--som_height', default=None, type=int, help='rebuild SOM layer with height')
+    parser.add_argument('--adapt_batch_size', default=32, type=int, help='batch size for parallel SOM adaption')
     parser.add_argument('--sigma_begin', default=64, type=float, help='initial adaption kernel std-width')
     parser.add_argument('--sigma_end', default=0.1, type=float, help='final adaption kernel std-width')
     parser.add_argument('--eta_begin', default=0.5, type=float, help='initial learning rate')
@@ -68,7 +72,7 @@ def train_som(opt, model, device, data_loader, wandb_log_interval=500):
 
     step = 1
     epoch = 1
-    while True:
+    while True and step <= T:
         print('Epoch: {}'.format(epoch))
 
         for t, batch in enumerate(data_loader, 1):
@@ -83,11 +87,13 @@ def train_som(opt, model, device, data_loader, wandb_log_interval=500):
             
             # learning rate: linear decay
             eta = eta_begin if eta_begin == eta_end else eta_begin * (1.0 - progress) + progress * eta_end               
-            
-            # radius: exponential decay
-            sigma = sigma_begin * math.exp(progress * exp_decay_scale)      
+            eta = max(eta, 0)
 
-            som_error = model.som.adapt(h, eta, sigma, adapt_batch_size=64, stats=True)
+            # radius: exponential decay
+            sigma = sigma_begin * math.exp(progress * exp_decay_scale)
+            sigma = max(sigma, 0)
+
+            som_error = model.som.adapt(h, eta, sigma, adapt_batch_size=opt.adapt_batch_size, stats=True)
 
             print('{}: som_error: {}; eta: {}; sigma: {};'.format(step, som_error, eta, sigma))
 
@@ -154,12 +160,18 @@ def main():
     test_latent = model.encoder(test_batch)
     print('latent size: ', test_latent.shape)
 
-    count_parameters(model)
-    
     print('loading auto-encoder checkpoint: ', opt.ae_checkpoint)
     checkpoint_data = torch.load(opt.ae_checkpoint, map_location=device)
     model.load_state_dict(checkpoint_data['model_state_dict'])
 
+    if opt.som_width is not None and opt.som_width > 0 or opt.som_height is not None and opt.som_height > 0:
+        # reinitialze SOM layer to new size
+        w = model.som.width if opt.som_width is None else opt.som_width
+        h = model.som.height if opt.som_height is None else opt.som_height
+        print('reinitializing SOM layer to new size {}x{} (embedding dim: {})'.format(w, h, model.som.embedding_dim))
+        model.som = SomLayer(width=w, height=h, embedding_dim=model.som.embedding_dim)
+
+    count_parameters(model)
     model.to(device)
    
     train_som(opt, model, device, data_loader)
