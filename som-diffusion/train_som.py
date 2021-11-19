@@ -18,8 +18,8 @@ from train_ae import SomAutoEncoder, load_file_list, FileListImageDataset, show_
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str, help='device to use')
-    parser.add_argument('--device-index', default=0, type=int, help='device index')
-    parser.add_argument('--manual_seed', default=0, type=int, help='initialization of pseudo-RNG')
+    parser.add_argument('--device-index', default=1, type=int, help='device index')
+    parser.add_argument('--manual_seed', default=42, type=int, help='initialization of pseudo-RNG')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
 
     parser.add_argument('--downscale_steps', default=3, type=int)
@@ -30,6 +30,11 @@ def parse_args():
     parser.add_argument('--image_dir_path', default='/media/koepf/data_cache/imagenet_small/64x64/**/*', type=str)
     parser.add_argument('--image_fn_regex', default='.*\.png$', type=str)
     parser.add_argument('--checkpoint_interval', default=2000, type=int)
+    
+    parser.add_argument('--sigma_begin', default=64, type=float, help='initial adaption kernel std-width')
+    parser.add_argument('--sigma_end', default=0.1, type=float, help='final adaption kernel std-width')
+    parser.add_argument('--eta_begin', default=0.5, type=float, help='initial learning rate')
+    parser.add_argument('--eta_end', default=0.05, type=float, help='final learning rate')
     parser.add_argument('--max_steps', default=10000, type=int)
 
     parser.add_argument('--wandb', default=False, action='store_true')
@@ -38,14 +43,14 @@ def parse_args():
     parser.add_argument('--project', default='som-diffusion', type=str, help='project name for wandb')
     parser.add_argument('--name', default='som_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
 
-    parser.add_argument('--ae_checkpoint', default='som-diffusion_checkpoint_0032500.pth', type=str)
+    parser.add_argument('--ae_checkpoint', default='som-diffusion_checkpoint_0045000.pth', type=str)
 
     opt = parser.parse_args()
     return opt
 
 
 @torch.no_grad()
-def train_som(opt, model, device, data_loader, max_epochs=10, wandb_log_interval=500):
+def train_som(opt, model, device, data_loader, wandb_log_interval=500):
 
     experiment_name = opt.name
     checkpoint_interval = opt.checkpoint_interval
@@ -53,14 +58,17 @@ def train_som(opt, model, device, data_loader, max_epochs=10, wandb_log_interval
     plt.ion()
 
     T = opt.max_steps
-    initial_sigma = model.som.width / 2
-    initial_alpha = 0.85
+    sigma_begin = opt.sigma_begin
+    sigma_end = opt.sigma_end
 
-    final_sigma = 1.0
-    exp_decay_scale = math.log(final_sigma/initial_sigma)
+    eta_begin = opt.eta_begin
+    eta_end = opt.eta_end
+    
+    exp_decay_scale = math.log(sigma_end/sigma_begin)
 
     step = 1
-    for epoch in range(max_epochs):
+    epoch = 1
+    while True:
         print('Epoch: {}'.format(epoch))
 
         for t, batch in enumerate(data_loader, 1):
@@ -72,14 +80,18 @@ def train_som(opt, model, device, data_loader, max_epochs=10, wandb_log_interval
             h = h.permute(0, 2, 3, 1).contiguous()
 
             progress = (step-1)/T   # increases linearly from 0 to 1
-            alpha = initial_alpha * (1.0 - progress)    # learning rate: linear decay
-            sigma = initial_sigma * math.exp(progress * exp_decay_scale)    # radius: exponential decay
+            
+            # learning rate: linear decay
+            eta = eta_begin if eta_begin == eta_end else eta_begin * (1.0 - progress) + progress * eta_end               
+            
+            # radius: exponential decay
+            sigma = sigma_begin * math.exp(progress * exp_decay_scale)      
 
-            som_error = model.som.adapt(h, alpha, sigma, adapt_batch_size=64, stats=True)
+            som_error = model.som.adapt(h, eta, sigma, adapt_batch_size=64, stats=True)
 
-            print('{}: som_error: {}; alpha: {}; sigma: {};'.format(step, som_error, alpha, sigma))
+            print('{}: som_error: {}; eta: {}; sigma: {};'.format(step, som_error, eta, sigma))
 
-            wandb.log({'som_error': som_error, 'alpha': alpha, 'sigma': sigma })
+            wandb.log({'som_error': som_error, 'progress': progress, 'eta': eta, 'sigma': sigma })
 
             if step % checkpoint_interval == 0 or step == T:
                 # write model_checkpoint
@@ -107,6 +119,7 @@ def train_som(opt, model, device, data_loader, max_epochs=10, wandb_log_interval
             if step > T:
                 break
 
+        epoch = epoch + 1
 
 
 def main():
