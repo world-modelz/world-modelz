@@ -16,35 +16,31 @@ from PIL import Image
 import wandb
 
 from autoencoder import SimpleResidualEncoder, SimpleResidualDecoder
-from som import SomLayer
+from vq import VectorQuantizerEMA
 
 
-class SomAutoEncoder(nn.Module):
-    def __init__(self, embedding_dim, downscale_steps=2, hidden_planes=128, in_channels=3, pass_through_som=False):
-        super(SomAutoEncoder, self).__init__()
+class VqAutoEncoder(nn.Module):
+    def __init__(self, embedding_dim, num_embeddings, downscale_steps=2, hidden_planes=128, in_channels=3):
+        super(VqAutoEncoder, self).__init__()
 
         self.encoder = SimpleResidualEncoder(in_channels, embedding_dim, downscale_steps, hidden_planes)
 
         decoder_cfg = [hidden_planes for _ in range(downscale_steps)]
         self.decoder = SimpleResidualDecoder(decoder_cfg, in_channels=embedding_dim, out_channels=in_channels)
         
-        self.pass_through_som = pass_through_som
-        self.som = SomLayer(width=128, height=128, embedding_dim=embedding_dim)
+        self.vq = VectorQuantizerEMA(embedding_dim, num_embeddings)
 
     def forward(self, x):
         h = self.encoder(x)
+    
+        # convert inputs from BCHW -> BHWC
+        h = h.permute(0, 2, 3, 1)
+        quantized, encodings, latent_loss, perplexity = self.vq.forward(h)
 
-        if self.pass_through_som:
-            
-            # convert inputs from BCHW -> BHWC
-            h = h.permute(0, 2, 3, 1)
+        # convert quantized from BHWC -> BCHW
+        quantized = quantized.permute(0, 3, 1, 2).contiguous()
 
-            h, diff = self.som.forward(h)
-
-            # convert quantized from BHWC -> BCHW
-            h = h.permute(0, 3, 1, 2).contiguous()
-
-        return self.decoder(h), diff
+        return self.decoder(quantized), latent_loss, perplexity
 
 
 # parse bool args correctly, see https://stackoverflow.com/a/43357954
@@ -68,21 +64,25 @@ def parse_args():
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
     parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
     parser.add_argument('--loss_fn', default='SmoothL1', type=str)
+    parser.add_argument('--max_epochs', default=10, type=int)
+    parser.add_argument('--wandb_log_interval', default=1000, type=int, help='wandb logging interval of reconstruction image')
 
     parser.add_argument('--downscale_steps', default=3, type=int)
     parser.add_argument('--embedding_dim', default=64, type=int)
     parser.add_argument('--hidden_planes', default=128, type=int)
+    parser.add_argument('--num_embeddings', default=512, type=int, help='VQ codebook size')
 
     parser.add_argument('--file_list_fn', default='imgnet_sm64_files.pth', type=str)
     parser.add_argument('--image_dir_path', default='/media/koepf/data_cache/imagenet_small/64x64/**/*', type=str)
     parser.add_argument('--image_fn_regex', default='.*\.png$', type=str)
     parser.add_argument('--checkpoint_interval', default=2500, type=int)
+    parser.add_argument('--latent_loss_weight', default=0.25, type=float)
 
     parser.add_argument('--wandb', default=False, action='store_true')
     parser.add_argument('--entity', default='andreaskoepf', type=str)
     parser.add_argument('--tags', default=None, type=str)
-    parser.add_argument('--project', default='som-diffusion', type=str, help='project name for wandb')
-    parser.add_argument('--name', default='ae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+    parser.add_argument('--project', default='vqae', type=str, help='project name for wandb')
+    parser.add_argument('--name', default='vquae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
 
     opt = parser.parse_args()
     return opt
@@ -153,8 +153,13 @@ def show_and_save(fn, reconstructions, show=True, save=True):
         torchvision.utils.save_image(reconstructions, fn)
 
 
-def train(experiment_name, model, losss_fn, device, data_loader, optimizer, lr_scheduler, checkpoint_interval=2500, max_epochs=10, wandb_log_interval=1000):
+def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
     plt.ion()
+
+    experiment_name = opt.name
+    checkpoint_interval = opt.checkpoint_interval
+    max_epochs = opt.max_epochs
+    wandb_log_interval = opt.wandb_log_interval
 
     train_recon_error = []
     step = 1
@@ -166,11 +171,13 @@ def train(experiment_name, model, losss_fn, device, data_loader, optimizer, lr_s
 
             batch = batch.to(device)
 
-            reconstruction, _ = model(batch)
-            loss = losss_fn(reconstruction, batch)
+            reconstruction, latent_loss, perplexity = model(batch)
+            r_loss = loss_fn(reconstruction, batch)
 
-            wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0]})
-            print('step: {}; loss: {}; lr: {}; epoch: {};'.format(step, loss.item(), lr_scheduler.get_last_lr()[0], epoch))
+            loss = r_loss + opt.latent_loss_weight * latent_loss
+
+            wandb.log({'loss': loss, 'r_loss': r_loss, 'latent_loss': latent_loss, 'perplexity': perplexity, 'lr': lr_scheduler.get_last_lr()[0]})
+            print('step: {}; loss: {}; perplexity: {}; lr: {}; epoch: {};'.format(step, loss.item(), perplexity.item(), lr_scheduler.get_last_lr()[0], epoch))
 
             train_recon_error.append(loss.item())
 
@@ -187,7 +194,8 @@ def train(experiment_name, model, losss_fn, device, data_loader, optimizer, lr_s
                     'lr': lr_scheduler.get_last_lr(),
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': { 'train_recon_error': train_recon_error }
+                    'loss': { 'train_recon_error': train_recon_error },
+                    'opt': opt
                 }, fn)
 
                 fn = '{}_reconst_{:07d}.png'.format(experiment_name, step)
@@ -239,12 +247,6 @@ def main():
 
     # weights and biases
     wandb_init(opt)
-    
-    embedding_dim = opt.embedding_dim
-    downscale_steps = opt.downscale_steps
-    batch_size = opt.batch_size
-    learning_rate = opt.lr
-
 
     # data loader
     transform = transforms.Compose([
@@ -254,9 +256,9 @@ def main():
     def remove_none_collate(batch):
         batch = list(filter(lambda x : x is not None, batch))
         return default_collate(batch)
-    data_loader = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=remove_none_collate, num_workers=4)
+    data_loader = DataLoader(ds, batch_size=opt.batch_size, shuffle=True, collate_fn=remove_none_collate, num_workers=4)
 
-    model = SomAutoEncoder(embedding_dim=embedding_dim, downscale_steps=downscale_steps, pass_through_som=False)
+    model = VqAutoEncoder(opt.embedding_dim, opt.num_embeddings, opt.downscale_steps, hidden_planes=opt.hidden_planes)
     
     test_batch = torch.rand(1, 3, 64, 64)
     test_latent = model.encoder(test_batch)
@@ -266,6 +268,7 @@ def main():
     
     model.to(device)
 
+    learning_rate = opt.lr
     if opt.optimizer == 'AdamW':
         optimizer = optim.AdamW(model.parameters(), lr=learning_rate, amsgrad=False)
     elif opt.optimizer == 'Adam':
@@ -273,19 +276,20 @@ def main():
     else:
         raise RuntimeError('Unsupported optimizer specified.')
 
+    # simple lr-schedule: per epoch lr halfing
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.5)
 
-            
+    
     if opt.loss_fn == 'SmoothL1':
-        loss_fn = torch.nn.SmoothL1Loss(reduction='sum')
+        loss_fn = torch.nn.SmoothL1Loss(reduction='mean')
     elif opt.loss_fn == 'MSE':
-        loss_fn = torch.nn.MSELoss(reduction='sum')
+        loss_fn = torch.nn.MSELoss(reduction='mean')
     elif opt.loss_fn == 'MAE' or opt.loss_fn == 'L1':
-        loss_fn = torch.nn.L1Loss(reduction='sum')
+        loss_fn = torch.nn.L1Loss(reduction='mean')
     else:
         raise RuntimeError('Unsupported loss function type specified.')
 
-    train(opt.name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, opt.checkpoint_interval)
+    train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler)
 
 
 if __name__ == '__main__':

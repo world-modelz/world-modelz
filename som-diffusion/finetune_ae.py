@@ -59,37 +59,6 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--device', default='cuda', type=str, help='device to use')
-    parser.add_argument('--device-index', default=1, type=int, help='device index')
-    parser.add_argument('--manual_seed', default=0, type=int, help='initialization of pseudo-RNG')
-    parser.add_argument('--batch_size', default=96, type=int, help='batch size')
-    parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
-    parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
-    parser.add_argument('--loss_fn', default='SmoothL1', type=str)
-
-    parser.add_argument('--downscale_steps', default=3, type=int)
-    parser.add_argument('--embedding_dim', default=64, type=int)
-    parser.add_argument('--hidden_planes', default=128, type=int)
-
-    parser.add_argument('--file_list_fn', default='imgnet_sm64_files.pth', type=str)
-    parser.add_argument('--image_dir_path', default='/media/koepf/data_cache/imagenet_small/64x64/**/*', type=str)
-    parser.add_argument('--image_fn_regex', default='.*\.png$', type=str)
-    parser.add_argument('--checkpoint_interval', default=2500, type=int)
-
-    parser.add_argument('--wandb', default=False, action='store_true')
-    parser.add_argument('--entity', default='andreaskoepf', type=str)
-    parser.add_argument('--tags', default=None, type=str)
-    parser.add_argument('--project', default='finetune_ae', type=str, help='project name for wandb')
-    parser.add_argument('--name', default='finetune_ae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
-
-    parser.add_argument('--som_checkpoint', default='experiments/som_2b_som_checkpoint_0010000.pth', type=str)
-
-    opt = parser.parse_args()
-    return opt
-
-
 def load_file_list(file_list_fn, directory_path, pattern):
     if os.path.isfile(file_list_fn):
         list = torch.load(file_list_fn)
@@ -155,14 +124,58 @@ def show_and_save(fn, reconstructions, show=True, save=True):
         torchvision.utils.save_image(reconstructions, fn)
 
 
-def train(experiment_name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, checkpoint_interval=2500, max_epochs=10, wandb_log_interval=1000):
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--device', default='cuda', type=str, help='device to use')
+    parser.add_argument('--device-index', default=1, type=int, help='device index')
+    parser.add_argument('--manual_seed', default=0, type=int, help='initialization of pseudo-RNG')
+    parser.add_argument('--batch_size', default=96, type=int, help='batch size')
+    parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
+    parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
+    parser.add_argument('--loss_fn', default='SmoothL1', type=str)
+
+    parser.add_argument('--downscale_steps', default=3, type=int)
+    parser.add_argument('--embedding_dim', default=64, type=int)
+    parser.add_argument('--hidden_planes', default=128, type=int)
+
+    parser.add_argument('--file_list_fn', default='imgnet_sm64_files.pth', type=str)
+    parser.add_argument('--image_dir_path', default='/media/koepf/data_cache/imagenet_small/64x64/**/*', type=str)
+    parser.add_argument('--image_fn_regex', default='.*\.png$', type=str)
+    parser.add_argument('--checkpoint_interval', default=2000, type=int)
+
+    parser.add_argument('--wandb', default=False, action='store_true')
+    parser.add_argument('--entity', default='andreaskoepf', type=str)
+    parser.add_argument('--tags', default=None, type=str)
+    parser.add_argument('--project', default='finetune_ae', type=str, help='project name for wandb')
+    parser.add_argument('--name', default='finetune_ae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+
+    parser.add_argument('--max_epochs', default=10, type=int)
+    parser.add_argument('--wandb_log_interval', default=500, type=int)
+    parser.add_argument('--som_checkpoint', default='experiments/som_2b_som_checkpoint_0010000.pth', type=str)
+    parser.add_argument('--som_adapt_rate', default=0.02, type=float)
+    parser.add_argument('--som_adapt_radius', default=0.25, type=float)
+    parser.add_argument('--som_adapt_batch', default=8, type=int)
+    parser.add_argument('--som_adapt_skip', default=0, type=int)
+    parser.add_argument('--latent_loss_weight', default=0.25, type=float)
+
+    opt = parser.parse_args()
+    return opt
+
+
+def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
     plt.ion()
 
-    som_adapt_rate = 0.02
-    som_adapt_radius = 0.25
-    som_adapt_batch = 8
+    experiment_name = opt.name
+    checkpoint_interval = opt.checkpoint_interval
+    max_epochs = opt.max_epochs
+    wandb_log_interval = opt.wandb_log_interval
 
-    latent_loss_factor = 0.25
+    som_adapt_rate = opt.som_adapt_rate
+    som_adapt_radius = opt.som_adapt_radius
+    som_adapt_batch = opt.som_adapt_batch
+    som_adapt_interval = opt.som_adapt_skip + 1
+
+    latent_loss_weight = opt.latent_loss_weight
 
     train_recon_error = []
     step = 1
@@ -177,7 +190,7 @@ def train(experiment_name, model, loss_fn, device, data_loader, optimizer, lr_sc
             reconstruction, h_in, h_diff = model(batch)
             r_loss = loss_fn(reconstruction, batch)
             h_loss = h_diff
-            loss = r_loss + latent_loss_factor * h_loss 
+            loss = r_loss + latent_loss_weight * h_loss 
 
             train_recon_error.append(loss.item())
 
@@ -185,9 +198,16 @@ def train(experiment_name, model, loss_fn, device, data_loader, optimizer, lr_sc
             loss.backward()
             optimizer.step()
 
-            som_loss = model.som.adapt(h_in, som_adapt_rate, som_adapt_radius, som_adapt_batch)
+            if som_adapt_rate > 0 and step % som_adapt_interval == 0:
+                som_loss = model.som.adapt(h_in, som_adapt_rate, som_adapt_radius, som_adapt_batch)
+            else:
+                som_loss = torch.tensor(0)
 
-            wandb.log({'loss': loss.item(), 'r_loss': r_loss, 'h_loss': h_loss, 'som_loss': som_loss, 'lr': lr_scheduler.get_last_lr()[0]})
+            
+            wand_log = {'loss': loss.item(), 'r_loss': r_loss, 'h_loss': h_loss, 'lr': lr_scheduler.get_last_lr()[0]}
+            if som_loss > 0:
+                wand_log['som_loss'] = som_loss
+            wandb.log(wand_log)
             print('step: {}; loss: {} (h: {}); lr: {}; epoch: {};'.format(step, loss.item(), h_loss.item(), lr_scheduler.get_last_lr()[0], epoch))
             
             if step % checkpoint_interval == 0:
@@ -254,7 +274,6 @@ def main():
 
     batch_size = opt.batch_size
     learning_rate = opt.lr
-    experiment_name = opt.name
     optimizer_name = opt.optimizer
     loss_fn_name = opt.loss_fn
 
@@ -262,10 +281,10 @@ def main():
     checkpoint_data = torch.load(opt.som_checkpoint, map_location=device)
     
     # use checkpoint options
-    opt = checkpoint_data['opt']
+    chkpt_opt = checkpoint_data['opt']
 
-    embedding_dim = opt.embedding_dim
-    downscale_steps = opt.downscale_steps
+    embedding_dim = chkpt_opt.embedding_dim
+    downscale_steps = chkpt_opt.downscale_steps
     
     # data loader
     transform = transforms.Compose([
@@ -306,7 +325,7 @@ def main():
     else:
         raise RuntimeError('Unsupported loss function type specified.')
 
-    train(experiment_name, model, loss_fn, device, data_loader, optimizer, lr_scheduler, opt.checkpoint_interval)
+    train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler)
 
 
 if __name__ == '__main__':
