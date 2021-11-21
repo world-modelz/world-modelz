@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class VectorQuantizerEMA(nn.Module):
     def __init__(self, embedding_dim, num_embeddings, num_latents=1, decay=0.99, eps=1e-5):
         super().__init__()
@@ -108,3 +109,66 @@ class VectorQuantizerEMA(nn.Module):
     def reset_stats(self):
         self.activation_count.zero_()
         self.accumulated_error.zero_()
+
+
+class VectorQuantizerEMA1(nn.Module):
+    def __init__(self, num_embeddings, embedding_dim, decay=0.99, epsilon=1e-5):
+        super(VectorQuantizerEMA1, self).__init__()
+        
+        self._embedding_dim = embedding_dim
+        self._num_embeddings = num_embeddings
+        
+        self._embedding = nn.Embedding(self._num_embeddings, self._embedding_dim)
+        self._embedding.weight.data.normal_()
+        
+        self.register_buffer('_ema_cluster_size', torch.zeros(num_embeddings))
+        self._ema_w = nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim))
+        self._ema_w.data.normal_()
+        
+        self._decay = decay
+        self._epsilon = epsilon
+
+    def forward(self, inputs):
+        device = self._embedding.weight.device
+
+        input_shape = inputs.shape
+        
+        # Flatten input
+        flat_input = inputs.reshape(-1, self._embedding_dim)
+        
+        # Calculate distances
+        distances = (torch.sum(flat_input**2, dim=1, keepdim=True) 
+                    + torch.sum(self._embedding.weight**2, dim=1)
+                    - 2 * torch.matmul(flat_input, self._embedding.weight.t()))
+            
+        # Encoding
+        encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
+        encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings).to(device)
+        encodings.scatter_(1, encoding_indices, 1)
+        
+        # Use EMA to update the embedding vectors
+        if self.training:
+            self._ema_cluster_size = self._ema_cluster_size * self._decay + \
+                                     (1 - self._decay) * torch.sum(encodings, 0)
+    
+            n = torch.sum(self._ema_cluster_size.data)
+            self._ema_cluster_size = (
+                (self._ema_cluster_size + self._epsilon)
+                / (n + self._num_embeddings * self._epsilon) * n)
+            
+            dw = torch.matmul(encodings.t(), flat_input)
+            self._ema_w.data = self._ema_w * self._decay + (1 - self._decay) * dw
+            
+            self._embedding.weight.data = self._ema_w / self._ema_cluster_size.unsqueeze(1)
+        
+        # Quantize and unflatten
+        quantized = torch.matmul(encodings, self._embedding.weight).view(input_shape)
+        
+        # Loss
+        commitment_loss = torch.mean((quantized.detach() - inputs)**2)
+        
+        quantized = inputs + (quantized - inputs).detach()
+        avg_probs = torch.mean(encodings, dim=0)
+        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+        
+        return quantized, encodings, commitment_loss, perplexity

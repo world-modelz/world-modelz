@@ -77,6 +77,7 @@ def parse_args():
     parser.add_argument('--image_fn_regex', default='.*\.png$', type=str)
     parser.add_argument('--checkpoint_interval', default=2500, type=int)
     parser.add_argument('--latent_loss_weight', default=0.25, type=float)
+    parser.add_argument('--vq_reuse_interval', default=500, type=int)
 
     parser.add_argument('--wandb', default=False, action='store_true')
     parser.add_argument('--entity', default='andreaskoepf', type=str)
@@ -160,6 +161,7 @@ def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
     checkpoint_interval = opt.checkpoint_interval
     max_epochs = opt.max_epochs
     wandb_log_interval = opt.wandb_log_interval
+    vq_reuse_interval = opt.vq_reuse_interval
 
     train_recon_error = []
     step = 1
@@ -176,14 +178,23 @@ def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
 
             loss = r_loss + opt.latent_loss_weight * latent_loss
 
-            wandb.log({'loss': loss, 'r_loss': r_loss, 'latent_loss': latent_loss, 'perplexity': perplexity, 'lr': lr_scheduler.get_last_lr()[0]})
-            print('step: {}; loss: {}; perplexity: {}; lr: {}; epoch: {};'.format(step, loss.item(), perplexity.item(), lr_scheduler.get_last_lr()[0], epoch))
-
             train_recon_error.append(loss.item())
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            log_data = {'loss': loss, 'r_loss': r_loss, 'latent_loss': latent_loss, 'perplexity': perplexity, 'lr': lr_scheduler.get_last_lr()[0]}
+            
+            print('step: {}; loss: {}; perplexity: {}; lr: {}; epoch: {};'.format(step, loss.item(), perplexity.item(), lr_scheduler.get_last_lr()[0], epoch))
+
+            if step % vq_reuse_interval == 0:
+                c = model.vq.reuse_inactive()
+                log_data['reused'] = c
+                print('resued: ', c.item())
+                model.vq.reset_stats()
+
+            wandb.log(log_data)
 
             if step % checkpoint_interval == 0:
                 # write model_checkpoint
