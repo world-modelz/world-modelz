@@ -36,7 +36,7 @@
 - relational unit (self-attention): [Relational Deep Reinforcement Learning](https://arxiv.org/abs/1806.01830)
 - XLand: [Open-Ended Learning Leads to Generally Capable Agents](https://arxiv.org/abs/2107.12808), [Blog](https://deepmind.com/blog/article/generally-capable-agents-emerge-from-open-ended-play), [Video](https://youtu.be/lTmL7jwFfdw)
 - [Survey of Generalisation in Deep Reinforcement Learning](https://arxiv.org/abs/2111.09794)
-
+- Embodiment: [From Machine Learning to Robotics: Challenges and Opportunities for Embodied Intelligence](https://arxiv.org/abs/2110.15245)
 
 ## Important Related Papers
 
