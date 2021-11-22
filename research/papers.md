@@ -44,6 +44,7 @@
 - PixelCNN: [Conditional Image Generation with PixelCNN Decoders](https://arxiv.org/abs/1606.05328)
 - PixelSNAIL: [PixelSNAIL: An Improved Autoregressive Generative Model](https://arxiv.org/abs/1712.09763)
 - VQGAN: [Taming Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2012.09841), [Website](https://compvis.github.io/taming-transformers/)
+- DALL-E [Zero-Shot Text-to-Image Generation](https://arxiv.org/abs/2102.12092), code: [sberbank-ai/ru-dalle](https://github.com/sberbank-ai/ru-dalle/tree/master/rudalle)
 
 
 ## Interesting Other Stuff
