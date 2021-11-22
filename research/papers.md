@@ -51,7 +51,7 @@
 
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
 - Blog: [Debugging Deep Model-based Reinforcement Learning Systems](https://www.natolambert.com/writing/debugging-mbrl)
-
+- Blog: [A Consciousness-Inspired Planning Agent for Model-Based Reinforcement Learning](https://mila.quebec/en/article/a-consciousness-inspired-planning-agent-for-model-based-reinforcement-learning/)
 
 ## Acknowledgements
 
