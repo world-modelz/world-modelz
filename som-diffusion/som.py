@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torchvision
@@ -108,22 +110,34 @@ def test_rgb_som():
     s.to(device)
 
     num_iter = 100
-    initial_sigma = width / 2
-    initial_alpha = 0.2
 
+    sigma_begin = width / 2
+    sigma_end = 1.0
+    exp_decay_scale = math.log(sigma_end/sigma_begin)
+
+    eta_begin = 0.2
+    eta_end = 0.01
+
+    T = num_iter
     fake_input = torch.rand(512*512, 3).to(device)
     for i in range(1, num_iter+1):
         
         perm = torch.randperm(fake_input.size(0), device=device)
         input = fake_input[perm]
 
-        annealing_factor = 1.0 - i/num_iter
-        alpha = initial_alpha * annealing_factor
-        sigma = initial_sigma * annealing_factor
-        
-        error = s.adapt(input, alpha=alpha, sigma=sigma, adapt_batch_size=1024)
+        progress = (i-1)/T   # increases linearly from 0 to 1
 
-        print('step: {}: sigma: {:.2f}; alpha {:.2f}; error: {:.5f};'.format(i, sigma, alpha, error.item()))
+        # learning rate: linear decay
+        eta = eta_begin if eta_begin == eta_end else eta_begin * (1.0 - progress) + progress * eta_end
+        eta = max(eta, 0)
+        
+        # radius: exponential decay
+        sigma = sigma_begin * math.exp(progress * exp_decay_scale)
+        sigma = max(sigma, 0)
+
+        error = s.adapt(input, alpha=eta, sigma=sigma, adapt_batch_size=1024)
+
+        print('step: {}: sigma: {:.2f}; eta {:.2f}; error: {:.5f};'.format(i, sigma, eta, error.item()))
         if i % 10 == 0:
             img = s.embedding.weight.data.view(height, width, 3).permute(2,0,1)
             torchvision.utils.save_image(img, 'test{0}.png'.format(i))
