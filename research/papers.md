@@ -19,6 +19,9 @@
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 - AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
 
+### Philosophic
+- [Free Will Belief as a consequence of Model-based Reinforcement Learning](https://arxiv.org/abs/2111.08435)
+
 
 ## Video prediction
 
@@ -32,6 +35,7 @@
 
 - relational unit (self-attention): [Relational Deep Reinforcement Learning](https://arxiv.org/abs/1806.01830)
 - XLand: [Open-Ended Learning Leads to Generally Capable Agents](https://arxiv.org/abs/2107.12808), [Blog](https://deepmind.com/blog/article/generally-capable-agents-emerge-from-open-ended-play), [Video](https://youtu.be/lTmL7jwFfdw)
+- [Survey of Generalisation in Deep Reinforcement Learning](https://arxiv.org/abs/2111.09794)
 
 
 ## Important Related Papers
