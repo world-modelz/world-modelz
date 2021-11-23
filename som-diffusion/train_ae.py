@@ -43,6 +43,8 @@ class SomAutoEncoder(nn.Module):
 
             # convert quantized from BHWC -> BCHW
             h = h.permute(0, 3, 1, 2).contiguous()
+        else:
+            diff = None
 
         return self.decoder(h), diff
 

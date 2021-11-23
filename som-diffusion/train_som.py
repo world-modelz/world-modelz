@@ -110,13 +110,13 @@ def train_som(opt, model, device, data_loader, wandb_log_interval=500):
                 }, fn)
 
                 # save image with checkpoint
-                reconstruction = model(batch)
+                reconstruction,_ = model(batch)
                 fn = '{}_som_{:07d}.png'.format(experiment_name, step)
                 show_and_save(fn, reconstruction, show=False, save=True)
 
             if step % wandb_log_interval == 0:
                 # log reconstruction to wandb
-                reconstruction = model(batch)
+                reconstruction,_ = model(batch)
                 img_grid = torchvision.utils.make_grid(reconstruction.detach().cpu())
                 images = wandb.Image(img_grid, caption="Reconstruction")
                 wandb.log({"reconstruction": images})
