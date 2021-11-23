@@ -27,6 +27,57 @@ class SomLayer(nn.Module):
         self.register_buffer('activation_count', torch.zeros(num_embeddings, dtype=torch.long))
 
     @torch.no_grad()
+    def encode_indices_2d(self, bmu_indices):
+      
+        # generate x,y coordinates from indices
+        bmu_indices = bmu_indices.unsqueeze(-1)
+        best_match_y = bmu_indices.div(self.width, rounding_mode='trunc')
+        best_match_x = bmu_indices.remainder(self.width)
+        bmu_pos = torch.cat((best_match_x, best_match_y), dim=-1)
+        bmu_pos = bmu_pos.float()
+
+        bmu_pos_shape = bmu_pos.shape
+        bmu_pos = bmu_pos.view(-1, 2)
+
+        # subtract map center and add 0.5 to coordinates (pixel-centers)
+        bmu_pos = bmu_pos - torch.tensor([self.width/2 - 0.5, self.height/2 - 0.5], device=bmu_pos.device)
+
+        # device by half of width to get values in range [-1, 1] for all (x, y)
+        bmu_pos[:,0].div_(self.width/2)
+        bmu_pos[:,1].div_(self.height/2)
+
+        bmu_pos = bmu_pos.view(bmu_pos_shape)
+
+        return bmu_pos  # BxHxWx2
+
+    @torch.no_grad()    
+    def decode_indices_2d(self, bmu_pos):
+        bmu_pos_shape = bmu_pos.shape
+        assert(bmu_pos_shape[-1] == 2)
+
+        bmu_pos = bmu_pos.clamp(-1, 1).view(-1, 2)
+        bmu_pos[:,0].mul_(self.width/2)
+        bmu_pos[:,1].mul_(self.height/2)
+
+        bmu_pos = bmu_pos + torch.tensor([self.width/2, self.height/2], device=bmu_pos.device)
+        bmu_pos = bmu_pos.long()
+        
+        bmu_indices = bmu_pos[:,1] * self.width + bmu_pos[:,0]
+        bmu_indices = bmu_indices.view(bmu_pos_shape[:-1])
+
+        return bmu_indices
+
+    @torch.no_grad()
+    def encode_2d(self, input):
+        bmu_indices = self.encode(input)    # BxHxW
+        return self.encode_indices_2d(bmu_indices)
+
+    @torch.no_grad()    
+    def decode_2d(self, bmu_pos):
+        bmu_indices = self.decode_indices_2d(bmu_pos)
+        return self.decode(bmu_indices)
+
+    @torch.no_grad()
     def encode(self, input):
         assert(input.size(-1) == self.embedding_dim)
 
@@ -67,6 +118,8 @@ class SomLayer(nn.Module):
     @torch.no_grad()
     def adapt(self, x, alpha, sigma, adapt_batch_size=256, stats=True):
         assert(x.size(-1) == self.embedding_dim)
+        alpha = max(0, alpha)
+        sigma = max(1e-6, sigma)
 
         flat_input = x.reshape(-1, self.embedding_dim)
         num_flat_inputs = flat_input.size(0)
@@ -133,7 +186,6 @@ def test_rgb_som():
         
         # radius: exponential decay
         sigma = sigma_begin * math.exp(progress * exp_decay_scale)
-        sigma = max(sigma, 0)
 
         error = s.adapt(input, alpha=eta, sigma=sigma, adapt_batch_size=1024)
 
