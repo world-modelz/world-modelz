@@ -52,7 +52,7 @@ class SomLayer(nn.Module):
 
     @torch.no_grad()    
     def decode_indices_2d(self, bmu_pos):
-        bmu_pos = bmu_pos.permute(0, 2, 3, )   # Bx2xHxW -> BxHxWx2
+        bmu_pos = bmu_pos.permute(0, 2, 3, 1)   # Bx2xHxW -> BxHxWx2
 
         bmu_pos_shape = bmu_pos.shape
         assert(bmu_pos_shape[-1] == 2)
