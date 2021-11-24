@@ -31,6 +31,16 @@ class SomAutoEncoder(nn.Module):
         self.pass_through_som = pass_through_som
         self.som = SomLayer(width=128, height=128, embedding_dim=embedding_dim)
 
+    def encode_2d(self, x):
+        h = self.encoder(x)
+        h = h.permute(0, 2, 3, 1)       # BCHW -> BHWC
+        return self.som.encode_2d(h)
+
+    def decode_2d(self, x):
+        h = self.som.decode_2d(x)
+        h = h.permute(0, 3, 1, 2).contiguous()      # BHWC -> BCHW
+        return self.decoder(h)
+
     def forward(self, x):
         h = self.encoder(x)
 

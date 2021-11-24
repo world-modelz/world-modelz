@@ -43,6 +43,8 @@ class SomAutoEncoder(nn.Module):
 
             # convert quantized from BHWC -> BCHW
             h = h.permute(0, 3, 1, 2).contiguous()
+        else:
+            h_diff = None
 
         return self.decoder(h), h_in, h_diff
 
@@ -162,7 +164,7 @@ def parse_args():
     return opt
 
 
-def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
+def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler, chkpt_opt):
     plt.ion()
 
     experiment_name = opt.name
@@ -219,7 +221,9 @@ def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
                     'lr': lr_scheduler.get_last_lr(),
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': { 'train_recon_error': train_recon_error }
+                    'loss': { 'train_recon_error': train_recon_error },
+                    'opt': chkpt_opt,
+                    'finetune_opt': opt
                 }, fn)
 
                 fn = '{}_reconst_{:07d}.png'.format(experiment_name, step)
@@ -325,7 +329,7 @@ def main():
     else:
         raise RuntimeError('Unsupported loss function type specified.')
 
-    train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler)
+    train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler, chkpt_opt)
 
 
 if __name__ == '__main__':
