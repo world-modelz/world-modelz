@@ -16,20 +16,20 @@ def conv1x1(in_planes, out_planes, stride=1):
 
 
 class Residual(nn.Module):
-    def __init__(self, in_planes, hidden_planes, stride=1):
+    def __init__(self, in_planes, hidden_planes, stride=1, normalize=nn.BatchNorm2d, nonlinearity=nn.LeakyReLU):
         super(Residual, self).__init__()
         self._block = nn.Sequential(
             conv3x3(in_planes=in_planes, out_planes=hidden_planes, stride=stride),
-            nn.BatchNorm2d(hidden_planes),
-            nn.LeakyReLU(inplace=True),
+            normalize(hidden_planes),
+            nonlinearity(inplace=True),
             conv1x1(in_planes=hidden_planes, out_planes=in_planes),
-            nn.BatchNorm2d(in_planes)
+            normalize(in_planes)
         )
 
         if stride != 1:
             self.downsample = nn.Sequential(
                 nn.Conv2d(in_planes, in_planes, kernel_size=stride, stride=stride, bias=False),
-                nn.BatchNorm2d(in_planes),
+                normalize(in_planes),
             )
         else:
             self.downsample = None

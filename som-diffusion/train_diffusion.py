@@ -11,6 +11,7 @@ from warmup_scheduler import GradualWarmupScheduler
 from train_ae import wandb_init, count_parameters
 from diffusion_model import SimpleDiffusionModel
 
+
 def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler):
    
     batch_size = opt.batch_size
@@ -46,7 +47,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler):
 
         y = model(batch, t)
 
-        loss = loss_fn(y, -noise)
+        loss = loss_fn(y, -noise) / batch.size(0)
 
         optimizer.zero_grad()
         loss.backward()
@@ -76,10 +77,14 @@ def parse_args():
     parser.add_argument('--device', default='cuda', type=str, help='device to use')
     parser.add_argument('--device-index', default=1, type=int, help='device index')
     parser.add_argument('--manual_seed', default=42, type=int, help='initialization of pseudo-RNG')
-    parser.add_argument('--batch_size', default=96, type=int, help='batch size')
+    parser.add_argument('--batch_size', default=128, type=int, help='batch size')
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--loss_fn', default='SmoothL1', type=str)
+    parser.add_argument('--dropout', default=0.0, type=float)
+    parser.add_argument('--d_model', default=256, type=int)
+    parser.add_argument('--d_pos', default=32, type=int, help='size of timestep encoding')
+    parser.add_argument('--num_layers', default=8, type=int)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
 
     parser.add_argument('--wandb', default=False, action='store_true')
@@ -91,7 +96,6 @@ def parse_args():
     parser.add_argument('--input_dataset', default='experiments/ds2/diffusion_input_1k.pth', type=str)
     parser.add_argument('--warmup', default=500, type=int)
     parser.add_argument('--max_steps', default=200 * 1000, type=int)
-    
 
     opt = parser.parse_args()
     return opt
@@ -118,7 +122,7 @@ def main():
     print('Loadadd dataset {}, with {} examples, latent dim: {}.'.format(opt.input_dataset, dataset.size(0), dataset[0].size()))
 
 
-    model = SimpleDiffusionModel(d_model=256, dropout=.1, num_layers=8, d_pos=32)
+    model = SimpleDiffusionModel(d_model=opt.d_model, dropout=opt.dropout, num_layers=opt.num_layers, d_pos=32)
     model.to(device)
 
     count_parameters(model)
