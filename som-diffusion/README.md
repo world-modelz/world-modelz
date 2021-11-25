@@ -5,10 +5,11 @@ Use a (square) 2D [Self-organizing map](https://en.wikipedia.org/wiki/Self-organ
 
 ## Plan / progress
 - [OK] implement batched SOM layer as PyTorch nn.Module 
-- build encoder/decoder pair for auto-encoder and train on imagenet_small 64x64
-- train SOM with image-net encoder outputs
-- verify that full roundtrip over 2D SOM positions works and measure impact of noise on positions
-- build denoising model and train on SOM output vectors 
+- [OK] build encoder/decoder pair for auto-encoder and train on imagenet_small 64x64
+- [OK] train SOM with image-net encoder outputs
+- [OK] verify that full roundtrip over 2D SOM positions works
+- [0%] measure som distances to neighbors
+- [1%] build denoising model and train on SOM output vectors 
 
 ## potential experiments
 - growing som vs. final SOM size with shrinking gaussian kernel
