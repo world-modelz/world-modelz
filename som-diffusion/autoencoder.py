@@ -3,6 +3,7 @@ import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from som import SomLayer
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -150,3 +151,43 @@ class SimpleResidualDecoder(nn.Module):
     def forward(self, x):
         y = self.decoder_stack(x)
         return y
+
+
+class SomAutoEncoder(nn.Module):
+    def __init__(self, embedding_dim, downscale_steps=2, hidden_planes=128, in_channels=3, pass_through_som=False):
+        super(SomAutoEncoder, self).__init__()
+
+        self.encoder = SimpleResidualEncoder(in_channels, embedding_dim, downscale_steps, hidden_planes)
+
+        decoder_cfg = [hidden_planes for _ in range(downscale_steps)]
+        self.decoder = SimpleResidualDecoder(decoder_cfg, in_channels=embedding_dim, out_channels=in_channels)
+
+        self.pass_through_som = pass_through_som
+        self.som = SomLayer(width=128, height=128, embedding_dim=embedding_dim)
+
+    def encode_2d(self, x):
+        h = self.encoder(x)
+        h = h.permute(0, 2, 3, 1)       # BCHW -> BHWC
+        return self.som.encode_2d(h)
+
+    def decode_2d(self, x):
+        h = self.som.decode_2d(x)
+        h = h.permute(0, 3, 1, 2).contiguous()      # BHWC -> BCHW
+        return self.decoder(h)
+
+    def forward(self, x):
+        h = self.encoder(x)
+
+        if self.pass_through_som:
+
+            # convert inputs from BCHW -> BHWC
+            h = h.permute(0, 2, 3, 1)
+
+            h, diff = self.som.forward(h)
+
+            # convert quantized from BHWC -> BCHW
+            h = h.permute(0, 3, 1, 2).contiguous()
+        else:
+            diff = None
+
+        return self.decoder(h), diff

@@ -15,48 +15,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import wandb
 
-from autoencoder import SimpleResidualEncoder, SimpleResidualDecoder
+from autoencoder import SomAutoEncoder
 from som import SomLayer
-
-
-class SomAutoEncoder(nn.Module):
-    def __init__(self, embedding_dim, downscale_steps=2, hidden_planes=128, in_channels=3, pass_through_som=False):
-        super(SomAutoEncoder, self).__init__()
-
-        self.encoder = SimpleResidualEncoder(in_channels, embedding_dim, downscale_steps, hidden_planes)
-
-        decoder_cfg = [hidden_planes for _ in range(downscale_steps)]
-        self.decoder = SimpleResidualDecoder(decoder_cfg, in_channels=embedding_dim, out_channels=in_channels)
-        
-        self.pass_through_som = pass_through_som
-        self.som = SomLayer(width=128, height=128, embedding_dim=embedding_dim)
-
-    def encode_2d(self, x):
-        h = self.encoder(x)
-        h = h.permute(0, 2, 3, 1)       # BCHW -> BHWC
-        return self.som.encode_2d(h)
-
-    def decode_2d(self, x):
-        h = self.som.decode_2d(x)
-        h = h.permute(0, 3, 1, 2).contiguous()      # BHWC -> BCHW
-        return self.decoder(h)
-
-    def forward(self, x):
-        h = self.encoder(x)
-
-        if self.pass_through_som:
-            
-            # convert inputs from BCHW -> BHWC
-            h = h.permute(0, 2, 3, 1)
-
-            h, diff = self.som.forward(h)
-
-            # convert quantized from BHWC -> BCHW
-            h = h.permute(0, 3, 1, 2).contiguous()
-        else:
-            diff = None
-
-        return self.decoder(h), diff
 
 
 # parse bool args correctly, see https://stackoverflow.com/a/43357954
@@ -148,9 +108,9 @@ class FileListImageDataset(Dataset):
             print(e)
 
 
-def show_batch(x):
+def show_batch(x, nrow=8):
     x = x.detach().cpu()
-    grid = torchvision.utils.make_grid(x)
+    grid = torchvision.utils.make_grid(x, nrow=nrow)
     plt.imshow(grid.numpy().transpose((1, 2, 0)))
     plt.axis('off')
     plt.show()

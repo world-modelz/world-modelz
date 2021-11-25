@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torchvision import transforms
 
-from train_ae import SomAutoEncoder, load_file_list, FileListImageDataset, count_parameters
+from autoencoder import SomAutoEncoder
+from train_ae import load_file_list, FileListImageDataset, count_parameters
 
 
 def parse_args():

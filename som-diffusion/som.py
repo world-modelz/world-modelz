@@ -57,7 +57,8 @@ class SomLayer(nn.Module):
         bmu_pos_shape = bmu_pos.shape
         assert(bmu_pos_shape[-1] == 2)
 
-        bmu_pos = bmu_pos.clamp(-1, 1).view(-1, 2)
+        eps = 1e-6
+        bmu_pos = bmu_pos.clamp(-1+eps, 1-eps).reshape(-1, 2)
         bmu_pos[:,0].mul_(self.width/2)
         bmu_pos[:,1].mul_(self.height/2)
 

@@ -13,7 +13,8 @@ from PIL import Image
 import wandb
 
 from som import SomLayer
-from train_ae import SomAutoEncoder, load_file_list, FileListImageDataset, show_and_save, count_parameters, wandb_init
+from autoencoder import SomAutoEncoder
+from train_ae import load_file_list, FileListImageDataset, show_and_save, count_parameters, wandb_init
 
 
 def parse_args():

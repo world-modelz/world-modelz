@@ -21,10 +21,11 @@ class SimpleDiffusionModel(nn.Module):
 
         # increase dimensionality of input form 2 to target d_model
         self.init_block = nn.Sequential(
-            conv1x1(in_planes=2, out_planes=d_model*2, stride=1),
-            nn.GroupNorm(num_groups=32, num_channels=d_model*2),
-            nonlinearity(),
-            conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1),
+            #conv1x1(in_planes=2, out_planes=d_model*2, stride=1),
+            #nn.GroupNorm(num_groups=32, num_channels=d_model*2),
+            #nonlinearity(),
+            #conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1),
+            conv3x3(in_planes=2, out_planes=d_model*2, stride=1),
             nn.GroupNorm(num_groups=32, num_channels=d_model*2),
             nonlinearity(),
             conv1x1(d_model*2, d_model),
