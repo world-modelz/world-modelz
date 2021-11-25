@@ -15,7 +15,10 @@ class SimpleDiffusionModel(nn.Module):
 
         # increase dimensionality of input form 2 to target d_model
         self.init_block = nn.Sequential(
-            conv3x3(in_planes=2, out_planes=d_model*2, stride=1),
+            conv1x1(in_planes=2, out_planes=d_model*2, stride=1),
+            nn.GroupNorm(num_groups=32, num_channels=d_model*2),
+            nn.SiLU(inplace=True),
+            conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1),
             nn.GroupNorm(num_groups=32, num_channels=d_model*2),
             nn.SiLU(inplace=True),
             conv1x1(d_model*2, d_model),
@@ -42,19 +45,18 @@ class SimpleDiffusionModel(nn.Module):
             nn.SiLU(inplace=True),
             conv1x1(d_model, 2)
         )
+
         self._initialize()
 
     def _initialize(self):
         for m in self.modules():
-            """
             if (isinstance(m, nn.Conv2d)
                 or isinstance(m, nn.Linear) 
                 or isinstance(m, nn.Embedding)):
                 nn.init.normal_(m.weight, 0, 0.02)
                 #nn.init.orthogonal_(m.weight)
                 #nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif """
-            if isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
