@@ -25,6 +25,7 @@
 
 ## Video prediction
 
+- 3DNA: [NÜWA: Visual Synthesis Pre-training for Neural visUal World creAtion](https://arxiv.org/abs/2111.12417), [Website](https://github.com/microsoft/NUWA)
 - VideoGPT: [VideoGPT: Video Generation using VQ-VAE and Transformers](https://arxiv.org/abs/2104.10157)
 - FitVid: [FitVid: Overfitting in Pixel-Level Video Prediction](https://arxiv.org/abs/2106.13195)
 - [Predicting Video with VQVAE](https://arxiv.org/abs/2103.01950)
