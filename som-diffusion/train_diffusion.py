@@ -15,33 +15,48 @@ from autoencoder import SomAutoEncoder
 from diffusion_model import SimpleDiffusionModel
 
 
+def alpha_from_t(t):
+    return torch.cos(t*math.pi*0.5) ** 2
+
+
 @torch.no_grad()
-def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=8):
+def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20):
     model.eval()
 
     # start with Gaussian noise
-    x = torch.randn(batch_size, 2, 16, 16, device=device)
+    x0 = torch.zeros(batch_size, 2, 16, 16, device=device)
+    x = torch.randn_like(x0)
     i = 0
     trace = []
     for step in range(timesteps):
-        f = step / (timesteps-1)    # linear 0-1
+        f = step / (timesteps-1)    # linear 0-f
 
-        t = torch.ones(batch_size, 1, device=device) * f
+        t = torch.ones(batch_size, 1, device=device) * (1-f)
         t_ = t.view(-1, 1, 1, 1) # Bx1x1x1
+        alpha_ = alpha_from_t(t_)
 
-        noise_estimate = model(x, t)    # perdict noise
-        x0 = x + noise_estimate         # denoise batch
+        # prepare input
+        noise = torch.randn_like(x0) * (1-alpha_).sqrt()
+        x = x0 * alpha_.sqrt() + noise
 
-        sigma = math.sqrt(1 - f)
-        n = torch.randn_like(x) * sigma
-        x = x0 + n
+        # perdict noise
+        noise_estimate = model(x, t)
 
-        progress_percent = step * 100 / (timesteps-1)
-        if progress_percent >= i * 100 / (trace_steps-1):
-            while progress_percent >= i * 100 / (trace_steps-1):
+        # denoise batch
+        x0 = x + noise_estimate
+
+        # undo alpha scaling
+        if (1-f) > 1e-6:
+            x0 = x0 / alpha_.sqrt()
+
+        # clip denoised version
+        x0 = x0.clamp(-1, 1)    
+
+        if f >= i / (trace_steps-1):
+            while f >= i / (trace_steps-1):
                 i += 1
             trace.append(x0)
-            print('{:.1f}'.format(progress_percent))
+            print('{:.1f} (x0 norm: {:.2f}; noise norm: {:.2f})'.format(f * 100, x0.view(x0.size(0), -1).norm(dim=1).mean().item(), noise_estimate.view(x0.size(0), -1).norm(dim=1).mean().item() ) )
 
     return trace
 
@@ -68,20 +83,26 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
         
         # load batch
         batch_indices = train_indices[train_offset:train_offset+batch_size]
-        train_offset += batch_size
+        if not opt.single_batch:
+            train_offset += batch_size
 
-        batch = dataset[batch_indices]  
-
+        batch = dataset[batch_indices]
+        #show_batch(decoder_model.decode_2d(batch))
         batch = batch.to(device)
 
         t = torch.rand(batch_size, 1, device=device)
-        noise = torch.randn_like(batch)
+        #t = (1 - t).sqrt() # train lower t with higher probability
 
         t_ = t.view(-1, 1, 1, 1)
-        batch = batch * (1.0 - t_).sqrt() + noise * t_
+
+        #alpha = alpha_from_t(t)
+        alpha_ = alpha_from_t(t_)
+
+        noise = torch.randn_like(batch)
+        noise = noise * (1 - alpha_).sqrt()
+        batch = batch * alpha_.sqrt() + noise
 
         y = model(batch, t)
-
         loss = loss_fn(y, -noise) / batch.size(0)
 
         optimizer.zero_grad()
@@ -113,6 +134,8 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             img_grid = torchvision.utils.make_grid(eval_decode.detach().cpu(), nrow=opt.eval_batch_size)
             images = wandb.Image(img_grid, caption="Sampling Result")
             wandb.log({"sampling": images})
+            fn = '{}_sampling_{:07d}.png'.format(opt.name, step)
+            show_and_save(fn, img_grid, show=False, save=True)
             #show_batch(eval_decode, nrow=opt.eval_batch_size)
 
 
@@ -124,14 +147,14 @@ def parse_args():
     parser.add_argument('--batch_size', default=128, type=int, help='batch size')
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
     parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
-    parser.add_argument('--loss_fn', default='SmoothL1', type=str)
+    parser.add_argument('--loss_fn', default='MSE', type=str)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--eval_interval', default=1000, type=int)
     parser.add_argument('--eval_timesteps', default=500, type=int)
     parser.add_argument('--eval_batch_size', default=8, type=int)
 
     parser.add_argument('--weight_decay', default=0.01, type=float)
-    parser.add_argument('--dropout', default=0.0, type=float)
+    parser.add_argument('--dropout', default=0.1, type=float)
     parser.add_argument('--d_model', default=256, type=int)
     parser.add_argument('--d_pos', default=32, type=int, help='size of timestep encoding')
     parser.add_argument('--num_layers', default=8, type=int)
@@ -146,6 +169,7 @@ def parse_args():
     parser.add_argument('--decoder_model', default='experiments/ds2/som_ds2_8k_1_checkpoint_0040000.pth', type=str)
     parser.add_argument('--warmup', default=500, type=int)
     parser.add_argument('--max_steps', default=200 * 1000, type=int)
+    parser.add_argument('--single_batch', default=False, action='store_true')
 
     opt = parser.parse_args()
     return opt
