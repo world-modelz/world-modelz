@@ -1,8 +1,6 @@
+from copy import deepcopy
 import torch
 import torch.nn as nn
-from torch import Tensor
-
-from copy import deepcopy
 
 
 class EmaTraining(nn.Module):
@@ -24,7 +22,7 @@ class EmaTraining(nn.Module):
         for targ, src in zip(self.shadow.buffers(), self.model.buffers()):
             targ.copy_(buffer)
 
-    def forward(self, *input, **kwargs) -> Tensor:
+    def forward(self, *input, **kwargs):
         if self.training:
             return self.model(*input, **kwargs)
         else:

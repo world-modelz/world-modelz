@@ -63,6 +63,14 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
     return trace
 
 
+@torch.no_grad()
+def grad_norm(model_params):
+    sqsum = 0.0
+    for p in model_params:
+        sqsum += (p.grad ** 2).sum().item()
+    return math.sqrt(sqsum)
+
+
 def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder_model):
    
     batch_size = opt.batch_size
@@ -74,7 +82,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     max_steps = opt.max_steps
     epoch = 0
 
-    model = EmaTraining(model)
+    model = EmaTraining(model, decay=opt.ema_decay)
     for step in range(1, max_steps+1):
         model.train()
 
@@ -109,14 +117,16 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
         loss = loss_fn(y, -noise) / batch.size(0)
 
         optimizer.zero_grad()
+
         loss.backward()
+        gn = grad_norm(model.model.parameters())
         optimizer.step()
         lr_scheduler.step()
         model.update()
 
-        wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0]})
+        wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
 
-        print('{}: Loss: {:.3e}; lr: {:.3e}; epoch: {}'.format(step, loss.item(), lr_scheduler.get_last_lr()[0], epoch))
+        print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}'.format(step, loss.item(), lr_scheduler.get_last_lr()[0], gn, epoch))
 
         if step % checkpoint_interval == 0:
             # write model_checkpoint
@@ -174,6 +184,7 @@ def parse_args():
     parser.add_argument('--warmup', default=500, type=int)
     parser.add_argument('--max_steps', default=200 * 1000, type=int)
     parser.add_argument('--single_batch', default=False, action='store_true')
+    parser.add_argument('--ema_decay', default=0.9999, type=float, help='ema decay of shadow model')
 
     opt = parser.parse_args()
     return opt
