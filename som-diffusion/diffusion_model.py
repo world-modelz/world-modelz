@@ -23,11 +23,11 @@ class SimpleDiffusionModel(nn.Module):
 
         # increase dimensionality of input form 2 to target d_model
         self.init_block = nn.Sequential(
-            # conv1x1(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
-            # normalize(num_channels=d_model*2),
-            # nonlinearity(),
-            # conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1, bias=True),
-            conv3x3(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
+            conv1x1(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
+            normalize(num_channels=d_model*2),
+            nonlinearity(),
+            conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1, bias=True),
+            #conv3x3(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
             normalize(num_channels=d_model*2),
             nonlinearity(),
             conv1x1(d_model*2, d_model),
@@ -52,7 +52,10 @@ class SimpleDiffusionModel(nn.Module):
             conv3x3(in_planes=d_model2, out_planes=d_model, stride=1),
             normalize(num_channels=d_model),
             nonlinearity(inplace=True),
-            conv1x1(d_model, 2, bias=True)
+            conv1x1(d_model, d_model*2),
+            normalize(num_channels=d_model*2),
+            nonlinearity(),
+            conv1x1(d_model*2, 2, bias=True)
         )
 
         self._initialize()

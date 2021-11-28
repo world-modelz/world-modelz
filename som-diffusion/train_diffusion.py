@@ -10,13 +10,15 @@ import torchvision
 import wandb
 
 from warmup_scheduler import GradualWarmupScheduler
+from ema_training import EmaTraining
 from train_ae import show_and_save, wandb_init, count_parameters, show_batch
 from autoencoder import SomAutoEncoder
 from diffusion_model import SimpleDiffusionModel
 
 
+s = 0.008  # see 3.2 in https://arxiv.org/abs/2102.09672
 def alpha_from_t(t):
-    return torch.cos(t*math.pi*0.5) ** 2
+    return torch.cos((t+s)/(1+s) * math.pi*0.5) ** 2
 
 
 @torch.no_grad()
@@ -29,7 +31,7 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
     i = 0
     trace = []
     for step in range(timesteps):
-        f = step / (timesteps-1)    # linear 0-f
+        f = step / (timesteps-1)    # linear 0-1
 
         t = torch.ones(batch_size, 1, device=device) * (1-f)
         t_ = t.view(-1, 1, 1, 1) # Bx1x1x1
@@ -71,6 +73,8 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     train_offset = dataset.size(0)
     max_steps = opt.max_steps
     epoch = 0
+
+    model = EmaTraining(model)
     for step in range(1, max_steps+1):
         model.train()
 
@@ -95,7 +99,6 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
         t_ = t.view(-1, 1, 1, 1)
 
-        #alpha = alpha_from_t(t)
         alpha_ = alpha_from_t(t_)
 
         noise = torch.randn_like(batch)
@@ -109,6 +112,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
+        model.update()
 
         wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0]})
 
@@ -121,7 +125,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             torch.save({
                 'step': step,
                 'lr': lr_scheduler.get_last_lr(),
-                'model_state_dict': model.state_dict(),
+                'model_state_dict': model.shadow.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'opt': opt,
             }, fn)
