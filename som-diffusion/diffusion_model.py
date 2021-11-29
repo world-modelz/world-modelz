@@ -23,11 +23,11 @@ class SimpleDiffusionModel(nn.Module):
 
         # increase dimensionality of input form 2 to target d_model
         self.init_block = nn.Sequential(
-            conv1x1(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
-            normalize(num_channels=d_model*2),
-            nonlinearity(),
-            conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1, bias=True),
-            #conv3x3(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
+            #conv1x1(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
+            #normalize(num_channels=d_model*2),
+            #nonlinearity(),
+            #conv3x3(in_planes=d_model*2, out_planes=d_model*2, stride=1, bias=True),
+            conv3x3(in_planes=2, out_planes=d_model*2, stride=1, bias=True),
             normalize(num_channels=d_model*2),
             nonlinearity(),
             conv1x1(d_model*2, d_model),
@@ -52,10 +52,11 @@ class SimpleDiffusionModel(nn.Module):
             conv3x3(in_planes=d_model2, out_planes=d_model, stride=1),
             normalize(num_channels=d_model),
             nonlinearity(inplace=True),
-            conv1x1(d_model, d_model*2),
-            normalize(num_channels=d_model*2),
-            nonlinearity(),
-            conv1x1(d_model*2, 2, bias=True)
+            conv1x1(d_model, 2, bias=True)
+            # conv1x1(d_model, d_model*2),
+            # normalize(num_channels=d_model*2),
+            # nonlinearity(),
+            # conv1x1(d_model*2, 2, bias=True)   
         )
 
         self._initialize()
@@ -66,7 +67,7 @@ class SimpleDiffusionModel(nn.Module):
                 or isinstance(m, nn.Linear) 
                 or isinstance(m, nn.Embedding)):
                 pass
-                #nn.init.normal_(m.weight, 0, 0.01)
+                #nn.init.normal_(m.weight, 0, 0.02)
                 #nn.init.orthogonal_(m.weight)
                 #nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):

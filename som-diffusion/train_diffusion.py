@@ -160,7 +160,7 @@ def parse_args():
     parser.add_argument('--manual_seed', default=42, type=int, help='initialization of pseudo-RNG')
     parser.add_argument('--batch_size', default=128, type=int, help='batch size')
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
-    parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--loss_fn', default='MSE', type=str)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--eval_interval', default=1000, type=int)
@@ -168,7 +168,7 @@ def parse_args():
     parser.add_argument('--eval_batch_size', default=8, type=int)
 
     parser.add_argument('--weight_decay', default=0.01, type=float)
-    parser.add_argument('--dropout', default=0.1, type=float)
+    parser.add_argument('--dropout', default=0.0, type=float)
     parser.add_argument('--d_model', default=256, type=int)
     parser.add_argument('--d_pos', default=32, type=int, help='size of timestep encoding')
     parser.add_argument('--num_layers', default=8, type=int)
