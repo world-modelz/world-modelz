@@ -9,8 +9,12 @@ Use a (square) 2D [Self-organizing map](https://en.wikipedia.org/wiki/Self-organ
 - [OK] train SOM with image-net encoder outputs
 - [OK] verify that full roundtrip over 2D SOM positions works
 - [0%] measure som distances to neighbors
-- [1%] build denoising model and train on SOM output vectors 
+- [25%] build denoising model and train on SOM output vectors 
 
 ## potential experiments
 - growing som vs. final SOM size with shrinking gaussian kernel
 - first learn auto-encoder alone (without quantization) and start learning the SOM only after good auto-encoder representations have been formed, during SOM training freeze weights of AE, potentially in final phase learn everything together 
+
+## References
+- Paper: [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239); Repo: [hojonathanho/diffusion](https://github.com/hojonathanho/diffusion)
+- Paper: [Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672); Repo: [openai/improved-diffusion](https://github.com/openai/improved-diffusion)
