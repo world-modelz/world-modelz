@@ -13,7 +13,8 @@ from warmup_scheduler import GradualWarmupScheduler
 from ema_training import EmaTraining
 from train_ae import show_and_save, wandb_init, count_parameters, show_batch
 from autoencoder import SomAutoEncoder
-from diffusion_model import SimpleDiffusionModel
+#from diffusion_model import SimpleDiffusionModel
+from diffusion_model_unet import UNetDiffusionModel
 
 
 s = 0.008  # see 3.2 in https://arxiv.org/abs/2102.09672
@@ -39,7 +40,10 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
 
         # prepare input
         noise = torch.randn_like(x0) * (1-alpha_).sqrt()
-        x = x0 * alpha_.sqrt() + noise
+        if f > 0.25:
+            x = x0 * alpha_.sqrt() + noise
+        else:
+            x = x0 + noise
 
         # perdict noise
         noise_estimate = model(x, t)
@@ -48,7 +52,7 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
         x0 = x + noise_estimate
 
         # undo alpha scaling
-        if (1-f) > 1e-6:
+        if f > 0.25:
             x0 = x0 / alpha_.sqrt()
 
         # clip denoised version
@@ -226,7 +230,8 @@ def main():
     """
 
     # create gaussian diffusion model
-    model = SimpleDiffusionModel(d_model=opt.d_model, dropout=opt.dropout, num_layers=opt.num_layers, d_pos=32)
+    #model = SimpleDiffusionModel(d_model=opt.d_model, dropout=opt.dropout, num_layers=opt.num_layers, d_pos=32)
+    model = UNetDiffusionModel(in_channels=2, out_channels=2, model_channels=128, num_res_blocks=3, channel_mult=(1,2,3), dropout=opt.dropout)
     model.to(device)
 
     count_parameters(model)

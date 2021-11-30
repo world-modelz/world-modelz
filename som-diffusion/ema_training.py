@@ -20,7 +20,7 @@ class EmaTraining(nn.Module):
             targ.mul_(self.decay).add_(src, alpha=1 - self.decay)
 
         for targ, src in zip(self.shadow.buffers(), self.model.buffers()):
-            targ.copy_(buffer)
+            targ.copy_(src)
 
     def forward(self, *input, **kwargs):
         if self.training:

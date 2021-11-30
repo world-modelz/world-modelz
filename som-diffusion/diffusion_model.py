@@ -74,7 +74,7 @@ class SimpleDiffusionModel(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def get_timestep_embedding(self, batch_size, dim, t, stretch=50*math.pi, max_period=100.0):
+    def get_timestep_embedding(self, dim, t, stretch=50*math.pi, max_period=100.0):
         div_term = torch.exp(torch.arange(0, dim, 2, device=t.device) * -(math.log(max_period) / dim)) * stretch
         pe = torch.zeros(t.size(0), dim, device=t.device)
         pe[:, 0::2] = torch.sin(t * stretch * div_term)
@@ -86,7 +86,7 @@ class SimpleDiffusionModel(nn.Module):
         x = self.init_block(x)
         
         # add positional embedding for timestep
-        time_emb = self.get_timestep_embedding(x.size(1), self.pos_dim, t).unsqueeze(-1).unsqueeze(-1)
+        time_emb = self.get_timestep_embedding(self.pos_dim, t).unsqueeze(-1).unsqueeze(-1)
         time_emb = time_emb.repeat(1, 1, x.shape[-2], x.shape[-1])
 
         # add time
