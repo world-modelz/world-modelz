@@ -56,8 +56,7 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
             x0 = x0 / alpha_.sqrt()
 
         # clip denoised version
-        #x0 = x0.clamp(-1, 1)
-        #x0.abs().max()
+        #x0 = x0.clamp(-2.5, 2.5)
 
         if f >= i / (trace_steps-1):
             while f >= i / (trace_steps-1):
@@ -86,8 +85,9 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     train_offset = dataset.size(0)
     max_steps = opt.max_steps
     epoch = 0
+    data_scaling = 2.5
 
-    model_ema =  ModelEmaV2(model, decay=opt.ema_decay)
+    model_ema =  ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
     for step in range(1, max_steps+1):
         model.train()
 
@@ -105,6 +105,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
         batch = dataset[batch_indices]
         #show_batch(decoder_model.decode_2d(batch))
+        batch = batch * data_scaling
         batch = batch.to(device)
 
         t = torch.rand(batch_size, 1, device=device)
@@ -119,7 +120,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
         batch = batch * alpha_.sqrt() + noise
 
         y = model(batch, t)
-        loss = loss_fn(y, -noise) / batch.size(0)
+        loss = loss_fn(y, -noise) # / batch.size(0)
 
         optimizer.zero_grad()
 
@@ -148,8 +149,10 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             }, fn)
 
         if step % eval_interval == 0:
-            trace = eval_model(opt, model_ema.module, device, opt.eval_timesteps, opt.eval_batch_size)
+            model_ = model_ema.module if model_ema is not None else model
+            trace = eval_model(opt, model_, device, opt.eval_timesteps, opt.eval_batch_size)
             eval_latent = torch.cat(trace, dim=0)
+            eval_latent = eval_latent / data_scaling
             eval_decode = decoder_model.decode_2d(eval_latent.cpu())
             # log result to wandb
             img_grid = torchvision.utils.make_grid(eval_decode.detach().cpu(), nrow=opt.eval_batch_size)
@@ -254,11 +257,11 @@ def main():
 
 
     if opt.loss_fn == 'SmoothL1':
-        loss_fn = torch.nn.SmoothL1Loss(reduction='sum')
+        loss_fn = torch.nn.SmoothL1Loss()
     elif opt.loss_fn == 'MSE':
-        loss_fn = torch.nn.MSELoss(reduction='sum')
+        loss_fn = torch.nn.MSELoss()
     elif opt.loss_fn == 'MAE' or opt.loss_fn == 'L1':
-        loss_fn = torch.nn.L1Loss(reduction='sum')
+        loss_fn = torch.nn.L1Loss()
     else:
         raise RuntimeError('Unsupported loss function type specified.')
 

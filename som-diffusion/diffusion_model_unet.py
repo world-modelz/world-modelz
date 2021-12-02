@@ -157,6 +157,56 @@ class ResBlock(TimestepBlock):
         return self.skip_connection(x) + h
 
 
+class AttentionBlock(nn.Module):
+    """
+    An attention block that allows spatial positions to attend to each other.
+    """
+
+    def __init__(self, channels, num_heads=1):
+        super().__init__()
+        self.channels = channels
+        self.num_heads = num_heads
+
+        self.norm = normalize(channels)
+        self.qkv = nn.Conv1d(channels, channels * 3, kernel_size=1)
+        self.attention = QKVAttention()
+        self.proj_out = zero_module(nn.Conv1d(channels, channels, kernel_size=1))
+
+    def forward(self, x):
+        b, c, *spatial = x.shape
+        x = x.reshape(b, c, -1)
+        
+      
+        qkv = self.qkv(self.norm(x))
+        qkv = qkv.reshape(b * self.num_heads, -1, qkv.shape[2])
+        h = self.attention(qkv)
+        h = h.reshape(b, -1, h.shape[-1])
+        h = self.proj_out(h)
+        return (x + h).reshape(b, c, *spatial)
+
+
+class QKVAttention(nn.Module):
+    """
+    A module which performs QKV attention.
+    """
+
+    def forward(self, qkv):
+        """
+        Apply QKV attention.
+
+        :param qkv: an [N x (C * 3) x T] tensor of Qs, Ks, and Vs.
+        :return: an [N x C x T] tensor after attention.
+        """
+        ch = qkv.shape[1] // 3
+        q, k, v = torch.split(qkv, ch, dim=1)
+        scale = 1 / math.sqrt(math.sqrt(ch))
+        weight = torch.einsum(
+            "bct,bcs->bts", q * scale, k * scale
+        )  # More stable with f16 than dividing afterwards
+        weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
+        return torch.einsum("bts,bcs->bct", weight, v)
+
+
 class UNetDiffusionModel(nn.Module):
     def __init__(self, 
         in_channels=2,
@@ -165,7 +215,10 @@ class UNetDiffusionModel(nn.Module):
         num_res_blocks=3,
         channel_mult=(1, 2, 3, 4),
         dropout=0,
-        use_scale_shift_norm=True
+        use_scale_shift_norm=True,
+        attention_resolutions=(2,4),
+        num_heads=4,
+        num_heads_upsample=4
     ):
         super().__init__()
 
@@ -205,7 +258,7 @@ class UNetDiffusionModel(nn.Module):
                 # if ds in attention_resolutions:
                 #     layers.append(
                 #         AttentionBlock(
-                #             ch, use_checkpoint=use_checkpoint, num_heads=num_heads
+                #             ch, num_heads=num_heads
                 #         )
                 #     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -224,7 +277,7 @@ class UNetDiffusionModel(nn.Module):
                 dropout,
                 use_scale_shift_norm=use_scale_shift_norm,
             ),
-            #AttentionBlock(ch, use_checkpoint=use_checkpoint, num_heads=num_heads),
+            AttentionBlock(ch, num_heads=num_heads),
             ResBlock(
                 ch,
                 time_embed_dim,
@@ -250,7 +303,6 @@ class UNetDiffusionModel(nn.Module):
                 #     layers.append(
                 #         AttentionBlock(
                 #             ch,
-                #             use_checkpoint=use_checkpoint,
                 #             num_heads=num_heads_upsample,
                 #         )
                 #     )
