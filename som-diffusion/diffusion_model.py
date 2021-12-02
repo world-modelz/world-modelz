@@ -77,8 +77,8 @@ class SimpleDiffusionModel(nn.Module):
     def get_timestep_embedding(self, dim, t, stretch=50*math.pi, max_period=100.0):
         div_term = torch.exp(torch.arange(0, dim, 2, device=t.device) * -(math.log(max_period) / dim)) * stretch
         pe = torch.zeros(t.size(0), dim, device=t.device)
-        pe[:, 0::2] = torch.sin(t * stretch * div_term)
-        pe[:, 1::2] = torch.cos(t * stretch * div_term)
+        pe[:, 0::2] = torch.sin(t * div_term)
+        pe[:, 1::2] = torch.cos(t * div_term)
         return pe
 
     def forward(self, x, t):

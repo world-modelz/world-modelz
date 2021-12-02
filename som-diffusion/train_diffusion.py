@@ -40,7 +40,7 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
 
         # prepare input
         noise = torch.randn_like(x0) * (1-alpha_).sqrt()
-        if f > 0.25:
+        if f > 0.1:
             x = x0 * alpha_.sqrt() + noise
         else:
             x = x0 + noise
@@ -52,11 +52,11 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
         x0 = x + noise_estimate
 
         # undo alpha scaling
-        if f > 0.25:
+        if f > 0.1:
             x0 = x0 / alpha_.sqrt()
 
         # clip denoised version
-        #x0 = x0.clamp(-2.5, 2.5)
+        x0 = x0.clamp(-1.25, 1.25)
 
         if f >= i / (trace_steps-1):
             while f >= i / (trace_steps-1):
@@ -85,7 +85,6 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     train_offset = dataset.size(0)
     max_steps = opt.max_steps
     epoch = 0
-    data_scaling = 2.5
 
     model_ema =  ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
     for step in range(1, max_steps+1):
@@ -105,7 +104,6 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
         batch = dataset[batch_indices]
         #show_batch(decoder_model.decode_2d(batch))
-        batch = batch * data_scaling
         batch = batch.to(device)
 
         t = torch.rand(batch_size, 1, device=device)
@@ -152,7 +150,6 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             model_ = model_ema.module if model_ema is not None else model
             trace = eval_model(opt, model_, device, opt.eval_timesteps, opt.eval_batch_size)
             eval_latent = torch.cat(trace, dim=0)
-            eval_latent = eval_latent / data_scaling
             eval_decode = decoder_model.decode_2d(eval_latent.cpu())
             # log result to wandb
             img_grid = torchvision.utils.make_grid(eval_decode.detach().cpu(), nrow=opt.eval_batch_size)
@@ -190,6 +187,7 @@ def parse_args():
     parser.add_argument('--name', default='diffusion_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
 
     parser.add_argument('--input_dataset', default='experiments/ds2/diffusion_input_1k.pth', type=str)
+    parser.add_argument('--firstn', default=-1, type=int)
     parser.add_argument('--decoder_model', default='experiments/ds2/som_ds2_8k_1_checkpoint_0040000.pth', type=str)
     parser.add_argument('--warmup', default=500, type=int)
     parser.add_argument('--max_steps', default=200 * 1000, type=int)
@@ -219,6 +217,9 @@ def main():
     data_file = torch.load(opt.input_dataset, map_location=torch.device('cpu'))
     dataset = data_file['data']
     print('Loaded dataset {}, with {} examples, latent dim: {}.'.format(opt.input_dataset, dataset.size(0), dataset[0].size()))
+    if opt.firstn > 0:
+        dataset = dataset[:opt.firstn]
+        print('Using first {} examples for training.'.format(dataset.size(0)))
 
     # load decoder model (cpu)
     print('Loading decoder_model: {}'.format(opt.decoder_model))
