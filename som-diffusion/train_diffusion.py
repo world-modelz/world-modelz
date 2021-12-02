@@ -177,7 +177,7 @@ def parse_args():
     parser.add_argument('--eval_timesteps', default=500, type=int)
     parser.add_argument('--eval_batch_size', default=8, type=int)
 
-    parser.add_argument('--weight_decay', default=0.01, type=float)
+    parser.add_argument('--weight_decay', default=0.0, type=float)
     parser.add_argument('--dropout', default=0.0, type=float)
     parser.add_argument('--d_model', default=256, type=int)
     parser.add_argument('--d_pos', default=32, type=int, help='size of timestep encoding')

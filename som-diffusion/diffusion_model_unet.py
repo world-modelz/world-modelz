@@ -255,12 +255,12 @@ class UNetDiffusionModel(nn.Module):
                     )
                 ]
                 ch = mult * model_channels
-                # if ds in attention_resolutions:
-                #     layers.append(
-                #         AttentionBlock(
-                #             ch, num_heads=num_heads
-                #         )
-                #     )
+                if ds in attention_resolutions:
+                    layers.append(
+                        AttentionBlock(
+                            ch, num_heads=num_heads
+                        )
+                    )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
                 input_block_chans.append(ch)
             if level != len(channel_mult) - 1:
@@ -299,13 +299,13 @@ class UNetDiffusionModel(nn.Module):
                     )
                 ]
                 ch = model_channels * mult
-                # if ds in attention_resolutions:
-                #     layers.append(
-                #         AttentionBlock(
-                #             ch,
-                #             num_heads=num_heads_upsample,
-                #         )
-                #     )
+                if ds in attention_resolutions:
+                    layers.append(
+                        AttentionBlock(
+                            ch,
+                            num_heads=num_heads_upsample,
+                        )
+                    )
                 if level and i == num_res_blocks:
                     layers.append(Upsample(ch))
                     ds //= 2
@@ -317,11 +317,10 @@ class UNetDiffusionModel(nn.Module):
             zero_module(conv3x3(model_channels, out_channels)),
         )
 
-    def timestep_embedding(self, dim, t, stretch=128*math.pi, max_period=256.0):
-        div_term = torch.exp(torch.arange(0, dim, 2, device=t.device) * -(math.log(max_period) / dim)) * stretch
-        pe = torch.zeros(t.size(0), dim, device=t.device)
-        pe[:, 0::2] = torch.sin(t * stretch * div_term)
-        pe[:, 1::2] = torch.cos(t * stretch * div_term)
+    def timestep_embedding(self, dim, t, stretch=5000, max_period=10000.0):
+        half = dim // 2
+        div_term = torch.exp(-math.log(max_period) * torch.arange(0, half, device=t.device) / half) * stretch
+        pe = torch.cat([torch.sin(t * div_term), torch.cos(t * div_term)], dim=-1)
         return pe
 
     def forward(self, x, t):
