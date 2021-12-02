@@ -20,7 +20,7 @@ def conv1x1(in_planes, out_planes, stride=1, bias=True):
 def normalize(num_channels):
     return nn.GroupNorm(num_groups=32, num_channels=num_channels)
 
-def nonlinearity(inplace=True):
+def nonlinearity(inplace=False):
     return nn.SiLU(inplace=inplace)
 
 def zero_module(module):
@@ -57,6 +57,47 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
             else:
                 x = layer(x)
         return x
+
+
+class Upsample(nn.Module):
+    """
+    An upsampling layer with an optional convolution.
+
+    :param channels: channels in the inputs and outputs.
+    """
+
+    def __init__(self, channels):
+        super().__init__()
+        self.channels = channels
+        self.conv = conv3x3(channels, channels)
+
+    def forward(self, x):
+        assert x.shape[1] == self.channels
+        x = F.interpolate(x, scale_factor=2, mode="nearest")
+        x = self.conv(x)
+        return x
+
+
+class Downsample(nn.Module):
+    """
+    A downsampling layer with an optional convolution.
+
+    :param channels: channels in the inputs and outputs.
+    :param use_conv: a bool determining if a convolution is applied.
+    """
+
+    def __init__(self, channels, use_conv=True):
+        super().__init__()
+        self.channels = channels
+        self.use_conv = use_conv
+        if use_conv:
+            self.op = conv3x3(channels, channels, stride=2)
+        else:
+            self.op = nn.AvgPool2d(stride)
+
+    def forward(self, x):
+        assert x.shape[1] == self.channels
+        return self.op(x)
 
 
 class ResBlock(TimestepBlock):
@@ -148,7 +189,7 @@ class UNetDiffusionModel(nn.Module):
         input_block_chans = [model_channels]
         ch = model_channels
 
-        #ds = 1
+        ds = 1
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):
                 layers = [
@@ -169,12 +210,12 @@ class UNetDiffusionModel(nn.Module):
                 #     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
                 input_block_chans.append(ch)
-            #if level != len(channel_mult) - 1:
-                # self.input_blocks.append(
-                #     TimestepEmbedSequential(Downsample(ch, conv_resample, dims=dims))
-                # )
-                #input_block_chans.append(ch)
-                #ds *= 2
+            if level != len(channel_mult) - 1:
+                self.input_blocks.append(
+                    TimestepEmbedSequential(Downsample(ch, use_conv=True))
+                )
+                input_block_chans.append(ch)
+                ds *= 2
 
         self.middle_block = TimestepEmbedSequential(
             ResBlock(
@@ -194,7 +235,7 @@ class UNetDiffusionModel(nn.Module):
 
         self.output_blocks = nn.ModuleList([])
         for level, mult in reversed(list(enumerate(channel_mult))):
-            for i in range(num_res_blocks): # + 1):
+            for i in range(num_res_blocks + 1):
                 layers = [
                     ResBlock(
                         ch + input_block_chans.pop(),
@@ -213,9 +254,9 @@ class UNetDiffusionModel(nn.Module):
                 #             num_heads=num_heads_upsample,
                 #         )
                 #     )
-                # if level and i == num_res_blocks:
-                #     layers.append(Upsample(ch, conv_resample, dims=dims))
-                #     ds //= 2
+                if level and i == num_res_blocks:
+                    layers.append(Upsample(ch))
+                    ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
 
         self.out = nn.Sequential(

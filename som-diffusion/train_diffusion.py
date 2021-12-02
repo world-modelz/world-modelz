@@ -10,7 +10,7 @@ import torchvision
 import wandb
 
 from warmup_scheduler import GradualWarmupScheduler
-from ema_training import EmaTraining
+from ema_training import ModelEmaV2
 from train_ae import show_and_save, wandb_init, count_parameters, show_batch
 from autoencoder import SomAutoEncoder
 #from diffusion_model import SimpleDiffusionModel
@@ -56,7 +56,8 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
             x0 = x0 / alpha_.sqrt()
 
         # clip denoised version
-        x0 = x0.clamp(-1, 1)    
+        #x0 = x0.clamp(-1, 1)
+        #x0.abs().max()
 
         if f >= i / (trace_steps-1):
             while f >= i / (trace_steps-1):
@@ -86,7 +87,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     max_steps = opt.max_steps
     epoch = 0
 
-    model = EmaTraining(model, decay=opt.ema_decay)
+    model_ema =  ModelEmaV2(model, decay=opt.ema_decay)
     for step in range(1, max_steps+1):
         model.train()
 
@@ -123,10 +124,12 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
         optimizer.zero_grad()
 
         loss.backward()
-        gn = grad_norm(model.model.parameters())
+        gn = grad_norm(model.parameters())
         optimizer.step()
         lr_scheduler.step()
-        model.update()
+
+        if model_ema is not None:
+            model_ema.update(model)
 
         wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
 
@@ -139,13 +142,13 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             torch.save({
                 'step': step,
                 'lr': lr_scheduler.get_last_lr(),
-                'model_state_dict': model.shadow.state_dict(),
+                'model_state_dict': model_ema.module.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'opt': opt,
             }, fn)
 
         if step % eval_interval == 0:
-            trace = eval_model(opt, model, device, opt.eval_timesteps, opt.eval_batch_size)
+            trace = eval_model(opt, model_ema.module, device, opt.eval_timesteps, opt.eval_batch_size)
             eval_latent = torch.cat(trace, dim=0)
             eval_decode = decoder_model.decode_2d(eval_latent.cpu())
             # log result to wandb
