@@ -84,45 +84,52 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
     train_offset = dataset.size(0)
     max_steps = opt.max_steps
+    acc_steps = opt.accumulation_steps
     epoch = 0
 
     model_ema =  ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
     for step in range(1, max_steps+1):
         model.train()
 
-        # batch_indices
-        if train_offset + batch_size > dataset.size(0):
-            print("Epoch: {}".format(epoch))
-            train_indices = torch.randperm(dataset.size(0))
-            train_offset = 0
-            epoch = epoch + 1
-        
-        # load batch
-        batch_indices = train_indices[train_offset:train_offset+batch_size]
-        if not opt.single_batch:
-            train_offset += batch_size
-
-        batch = dataset[batch_indices]
-        #show_batch(decoder_model.decode_2d(batch))
-        batch = batch.to(device)
-
-        t = torch.rand(batch_size, 1, device=device)
-        #t = (1 - t).sqrt() # train lower t with higher probability
-
-        t_ = t.view(-1, 1, 1, 1)
-
-        alpha_ = alpha_from_t(t_)
-
-        noise = torch.randn_like(batch)
-        noise = noise * (1 - alpha_).sqrt()
-        batch = batch * alpha_.sqrt() + noise
-
-        y = model(batch, t)
-        loss = loss_fn(y, -noise) # / batch.size(0)
-
         optimizer.zero_grad()
+        loss_sum = 0
+        for acc_step in range(acc_steps):
 
-        loss.backward()
+            # batch_indices
+            if train_offset + batch_size > dataset.size(0):
+                print("Epoch: {}".format(epoch))
+                train_indices = torch.randperm(dataset.size(0))
+                train_offset = 0
+                epoch = epoch + 1
+
+            # load batch
+            batch_indices = train_indices[train_offset:train_offset+batch_size]
+            if not opt.single_batch:
+                train_offset += batch_size
+
+            batch = dataset[batch_indices]
+            #show_batch(decoder_model.decode_2d(batch))
+            batch = batch.to(device)
+
+            t = torch.rand(batch_size, 1, device=device)
+            #t = (1 - t).sqrt() # train lower t with higher probability
+
+            t_ = t.view(-1, 1, 1, 1)
+
+            alpha_ = alpha_from_t(t_)
+
+            noise = torch.randn_like(batch)
+            noise = noise * (1 - alpha_).sqrt()
+            batch = batch * alpha_.sqrt() + noise
+
+            y = model(batch, t)
+            loss = loss_fn(y, -noise)
+            loss = loss / acc_steps
+
+            loss.backward()
+
+            loss_sum += loss.item()
+        
         gn = grad_norm(model.parameters())
         optimizer.step()
         lr_scheduler.step()
@@ -130,9 +137,9 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
         if model_ema is not None:
             model_ema.update(model)
 
-        wandb.log({'loss': loss.item(), 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
+        wandb.log({'loss': loss_sum, 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
 
-        print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}'.format(step, loss.item(), lr_scheduler.get_last_lr()[0], gn, epoch))
+        print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}'.format(step, loss_sum, lr_scheduler.get_last_lr()[0], gn, epoch))
 
         if step % checkpoint_interval == 0:
             # write model_checkpoint
@@ -169,9 +176,10 @@ def parse_args():
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--loss_fn', default='MSE', type=str)
-    parser.add_argument('--checkpoint_interval', default=5000, type=int)
-    parser.add_argument('--eval_interval', default=1000, type=int)
-    parser.add_argument('--eval_timesteps', default=500, type=int)
+    parser.add_argument('--accumulation_steps', default=1, type=int)
+    parser.add_argument('--checkpoint_interval', default=25000, type=int)
+    parser.add_argument('--eval_interval', default=2000, type=int)
+    parser.add_argument('--eval_timesteps', default=1000, type=int)
     parser.add_argument('--eval_batch_size', default=8, type=int)
 
     parser.add_argument('--weight_decay', default=0.0, type=float)
