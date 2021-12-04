@@ -18,6 +18,7 @@
 - DriveGAN: [DriveGAN: Towards a Controllable High-Quality Neural Simulation](https://arxiv.org/abs/2104.15060), [Website](https://nv-tlabs.github.io/DriveGAN/)
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 - AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
+- SCOFF: [Object Files and Schemata: Factorizing Declarative and Procedural Knowledge in Dynamical Systems](https://arxiv.org/abs/2006.16225)
 
 ### Philosophic
 - [Free Will Belief as a consequence of Model-based Reinforcement Learning](https://arxiv.org/abs/2111.08435)
