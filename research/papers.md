@@ -19,7 +19,8 @@
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 - AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
 - SCOFF: [Object Files and Schemata: Factorizing Declarative and Procedural Knowledge in Dynamical Systems](https://arxiv.org/abs/2006.16225)
-- S4: [Efficiently Modeling Long Sequences with Structured State Spaces](https://arxiv.org/abs/2111.00396), [Video](https://www.youtube.com/watch?v=EvQ3ncuriCM),code: [HazyResearch/state-spaces](https://github.com/HazyResearch/state-spaces)
+- S4: [Efficiently Modeling Long Sequences with Structured State Spaces](https://arxiv.org/abs/2111.00396), [Video](https://www.youtube.com/watch?v=EvQ3ncuriCM), code: [HazyResearch/state-spaces](https://github.com/HazyResearch/state-spaces)
+- PVG: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
 
 
 ### Philosophic
@@ -63,3 +64,4 @@ I would like to thank the following people for suggesting papers and links:
 - eop
 - Alexander Nikolin
 - jat
+- OGeneral
