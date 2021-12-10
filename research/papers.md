@@ -19,6 +19,8 @@
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 - AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
 - SCOFF: [Object Files and Schemata: Factorizing Declarative and Procedural Knowledge in Dynamical Systems](https://arxiv.org/abs/2006.16225)
+- S4: [Efficiently Modeling Long Sequences with Structured State Spaces](https://arxiv.org/abs/2111.00396), [Video](https://www.youtube.com/watch?v=EvQ3ncuriCM),code: [HazyResearch/state-spaces](https://github.com/HazyResearch/state-spaces)
+
 
 ### Philosophic
 - [Free Will Belief as a consequence of Model-based Reinforcement Learning](https://arxiv.org/abs/2111.08435)
