@@ -1,5 +1,6 @@
 # Interesting Papers
 
+
 ## World Models
 
 - [World Models](https://arxiv.org/abs/1803.10122), [Website](https://worldmodels.github.io/)
@@ -19,8 +20,7 @@
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 - AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
 - SCOFF: [Object Files and Schemata: Factorizing Declarative and Procedural Knowledge in Dynamical Systems](https://arxiv.org/abs/2006.16225)
-- S4: [Efficiently Modeling Long Sequences with Structured State Spaces](https://arxiv.org/abs/2111.00396), [Video](https://www.youtube.com/watch?v=EvQ3ncuriCM), code: [HazyResearch/state-spaces](https://github.com/HazyResearch/state-spaces)
-- PVG: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
+- PVG/CADDY: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
 
 
 ### Philosophic
@@ -43,6 +43,7 @@
 - [Survey of Generalisation in Deep Reinforcement Learning](https://arxiv.org/abs/2111.09794)
 - Embodiment: [From Machine Learning to Robotics: Challenges and Opportunities for Embodied Intelligence](https://arxiv.org/abs/2110.15245)
 
+
 ## Important Related Papers
 
 - VQ-VAE-2: [Generating Diverse High-Fidelity Images with VQ-VAE-2](https://arxiv.org/abs/1906.00446), code: [rosinality/vq-vae-2-pytorch](https://github.com/rosinality/vq-vae-2-pytorch)
@@ -52,11 +53,19 @@
 - DALL-E [Zero-Shot Text-to-Image Generation](https://arxiv.org/abs/2102.12092), code: [sberbank-ai/ru-dalle](https://github.com/sberbank-ai/ru-dalle/tree/master/rudalle)
 
 
+## New Methods Under Investigation
+- S4: [Efficiently Modeling Long Sequences with Structured State Spaces](https://arxiv.org/abs/2111.00396), [Video](https://www.youtube.com/watch?v=EvQ3ncuriCM), code: [HazyResearch/state-spaces](https://github.com/HazyResearch/state-spaces)
+- SRU++: [When Attention Meets Fast Recurrence:Training Language Models with Reduced Compute](https://arxiv.org/abs/2102.12459), [Website](https://www.asapp.com/blog/reducing-the-high-cost-of-training-nlp-models-with-sru/), code: [asappresearch/sru](https://github.com/asappresearch/sru)
+
+
 ## Interesting Other Stuff
 
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
 - Blog: [Debugging Deep Model-based Reinforcement Learning Systems](https://www.natolambert.com/writing/debugging-mbrl)
 - Blog: [A Consciousness-Inspired Planning Agent for Model-Based Reinforcement Learning](https://mila.quebec/en/article/a-consciousness-inspired-planning-agent-for-model-based-reinforcement-learning/)
+- Blog: [World Models applied to Sonic](https://dylandjian.github.io/world-models/), code: [dylandjian/retro-contest-sonic](https://github.com/dylandjian/retro-contest-sonic)
+- Project: [Cracking PHYRE with a World Model](https://cse.buffalo.edu/~avereshc/rl_spring20/Sheng_Liu.pdf)
+
 
 ## Acknowledgements
 
