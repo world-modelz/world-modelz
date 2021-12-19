@@ -51,7 +51,7 @@
 - PixelSNAIL: [PixelSNAIL: An Improved Autoregressive Generative Model](https://arxiv.org/abs/1712.09763)
 - VQGAN: [Taming Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2012.09841), [Website](https://compvis.github.io/taming-transformers/)
 - DALL-E [Zero-Shot Text-to-Image Generation](https://arxiv.org/abs/2102.12092), code: [sberbank-ai/ru-dalle](https://github.com/sberbank-ai/ru-dalle/tree/master/rudalle)
-- VQ-Diffusion: [Vector Quantized Diffusion Model for Text-to-Image Synthesis](https://arxiv.org/abs/2111.14822)
+- VQ-Diffusion: [Vector Quantized Diffusion Model for Text-to-Image Synthesis](https://arxiv.org/abs/2111.14822), code: [microsoft/VQ-Diffusion](https://github.com/microsoft/VQ-Diffusion)
 
 
 ## New Methods Under Investigation
