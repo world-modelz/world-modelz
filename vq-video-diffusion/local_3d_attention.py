@@ -55,17 +55,14 @@ class Local3dAttention(nn.Module):
         padding = ()
         if not mask:
             padding += (0, 0)   # 'skip' embedding dim
-        for i in range(3):
-            padding += (self.extents[i], self.extents[i])
-        
+        for i in reversed(range(3)):
+            padding += (self.extents[i], self.extents[i])       
         return F.pad(x, pad=padding, value=pad_value)
 
     def unfold(self, x):
-        kernel_size = ()
         for i in range(3):
-            kernel_size += (self.extents[i] * 2 + 1,)
-        for i in range(3):
-            x = x.unfold(dimension=i+1, size=kernel_size[i], step=1)
+            kernel_size = self.extents[i] * 2 + 1
+            x = x.unfold(dimension=i+1, size=kernel_size, step=1)
         return x
 
     def get_mask(self, batch_shape):
