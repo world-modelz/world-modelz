@@ -76,12 +76,16 @@ class Local3dAttention(nn.Module):
     def forward(self, x, q):
         q_shape = q.shape
         mask = self.get_mask(x.shape).to(x.device)
-        x = self.unfold(self.pad(x))    # pad border cases to get equal sizes
 
         # key & value projections
-        x = rearrange(x, 'b s h w d i j k -> (b s h w) (i j k) d')
         k = self.to_k(x)
         v = self.to_v(x)
+
+        k = self.unfold(self.pad(k))    # pad border cases to get equal sizes
+        v = self.unfold(self.pad(v))
+
+        v = rearrange(v, 'b s h w d i j k -> (b s h w) (i j k) d')
+        k = rearrange(k, 'b s h w d i j k -> (b s h w) (i j k) d')
 
         # query projection: 1 query per local input window
         q = rearrange(q, 'b s h w d -> (b s h w) 1 d')
@@ -155,7 +159,7 @@ def test():
     n = n.to(device)
 
     x = torch.randint(0, 99, (2,4,16,16), device=device)
-    y  = n.forward(x)
+    y = n.forward(x)
     print(y.size())
     
 
