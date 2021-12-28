@@ -3,6 +3,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.utils import checkpoint
 
 from einops import rearrange, repeat
 
@@ -17,7 +18,7 @@ class PreNorm(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout = 0.):
+    def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, hidden_dim),
@@ -31,7 +32,7 @@ class FeedForward(nn.Module):
 
 
 class Local3dAttention(nn.Module):
-    def __init__(self, extents, dim, heads=8, dim_head=64, dropout=.0):
+    def __init__(self, extents, dim, heads=8, dim_head=64, dropout=.0, use_checkpointing=True):
         super().__init__()
 
         self.extents = extents
@@ -50,6 +51,8 @@ class Local3dAttention(nn.Module):
             nn.Linear(inner_dim, dim),
             nn.Dropout(dropout)
         ) if project_out else nn.Identity()
+
+        self.use_checkpointing = use_checkpointing
 
     def pad(self, x, pad_value=0, mask=False):
         padding = ()
@@ -72,24 +75,16 @@ class Local3dAttention(nn.Module):
         m = self.unfold(m)
         return m
 
-    # todo: add causal masking
-    def forward(self, x, q):
-        q_shape = q.shape
-        mask = self.get_mask(x.shape).to(x.device)
-
-        # key & value projections
-        k = self.to_k(x)
-        v = self.to_v(x)
+    def attention(self, k, v, q):
+        batch_size = v.shape[0]
+        mask = self.get_mask(k.shape).to(k.device)
 
         k = self.unfold(self.pad(k))    # pad border cases to get equal sizes
         v = self.unfold(self.pad(v))
 
+        q = rearrange(q, 'b s h w d -> (b s h w) 1 d')
         v = rearrange(v, 'b s h w d i j k -> (b s h w) (i j k) d')
         k = rearrange(k, 'b s h w d i j k -> (b s h w) (i j k) d')
-
-        # query projection: 1 query per local input window
-        q = rearrange(q, 'b s h w d -> (b s h w) 1 d')
-        q = self.to_q(q)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), (q, k, v))
 
@@ -97,11 +92,28 @@ class Local3dAttention(nn.Module):
 
         # masking
         mask_value = -1e9
-        mask = repeat(mask, '1 s h w i j k -> (b s h w) heads 1 (i j k)', b=q_shape[0], heads = self.heads)    
+        mask = repeat(mask, '1 s h w i j k -> (b s h w) heads 1 (i j k)', b=batch_size, heads=self.heads)
         dots.masked_fill_(mask, mask_value)
 
         attn = self.attend(dots)
         out = torch.matmul(attn, v)
+
+        return out
+
+    # todo: add causal masking
+    def forward(self, x, q):
+        q_shape = q.shape
+        
+        # key & value projections
+        k = self.to_k(x)
+        v = self.to_v(x)
+        q = self.to_q(q)
+
+        if self.use_checkpointing:
+            out = checkpoint.checkpoint(self.attention, k, v, q)
+        else:
+            out = self.attention(k, v, q)
+       
         out = rearrange(out, 'b h n d -> b n (h d)')
         out = self.to_out(out)
         
@@ -160,6 +172,7 @@ def test():
 
     x = torch.randint(0, 99, (2,4,16,16), device=device)
     y = n.forward(x)
+    y.mean().backward()
     print(y.size())
     
 
