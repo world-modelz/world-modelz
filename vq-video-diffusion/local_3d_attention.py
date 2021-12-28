@@ -75,18 +75,16 @@ class Local3dAttention(nn.Module):
         m = self.unfold(m)
         return m
 
-    def attention(self, k, v, q):
+    def local_attention(self, k, v, q):
         batch_size = v.shape[0]
         mask = self.get_mask(k.shape).to(k.device)
 
         k = self.unfold(self.pad(k))    # pad border cases to get equal sizes
         v = self.unfold(self.pad(v))
 
-        q = rearrange(q, 'b s h w d -> (b s h w) 1 d')
-        v = rearrange(v, 'b s h w d i j k -> (b s h w) (i j k) d')
-        k = rearrange(k, 'b s h w d i j k -> (b s h w) (i j k) d')
-
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), (q, k, v))
+        q = rearrange(q, 'b s h w (H d) -> (b s h w) H 1 d', H = self.heads)
+        v = rearrange(v, 'b s h w (H d) i j k -> (b s h w) H (i j k) d', H = self.heads)
+        k = rearrange(k, 'b s h w (H d) i j k -> (b s h w) H (i j k) d', H = self.heads)
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
@@ -110,9 +108,9 @@ class Local3dAttention(nn.Module):
         q = self.to_q(q)
 
         if self.use_checkpointing:
-            out = checkpoint.checkpoint(self.attention, k, v, q)
+            out = checkpoint.checkpoint(self.local_attention, k, v, q)
         else:
-            out = self.attention(k, v, q)
+            out = self.local_attention(k, v, q)
        
         out = rearrange(out, 'b h n d -> b n (h d)')
         out = self.to_out(out)
