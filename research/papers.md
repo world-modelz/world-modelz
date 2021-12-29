@@ -34,6 +34,7 @@
 - FitVid: [FitVid: Overfitting in Pixel-Level Video Prediction](https://arxiv.org/abs/2106.13195)
 - [Predicting Video with VQVAE](https://arxiv.org/abs/2103.01950)
 - [Clockwork Variational Autoencoders](https://arxiv.org/abs/2102.09532)
+- GHVAE: [Greedy Hierarchical Variational Autoencoders for Large-Scale Video Prediction](https://arxiv.org/abs/2103.04174), [Website](https://sites.google.com/view/ghvae)
 
 
 ## RL
