@@ -39,7 +39,8 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
         alpha_ = alpha_from_t(t_)
 
         # prepare input
-        noise = torch.randn_like(x0) * (1-alpha_).sqrt()
+        eps = torch.randn_like(x0)
+        noise = eps * (1-alpha_).sqrt()
         if f > 0.1:
             x = x0 * alpha_.sqrt() + noise
         else:
@@ -49,7 +50,7 @@ def eval_model(opt, model, device, timesteps=1000, batch_size=32, trace_steps=20
         noise_estimate = model(x, t)
 
         # denoise batch
-        x0 = x + noise_estimate
+        x0 = x - noise_estimate * (1-alpha_).sqrt()
 
         # undo alpha scaling
         if f > 0.1:
@@ -118,12 +119,12 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
             alpha_ = alpha_from_t(t_)
 
-            noise = torch.randn_like(batch)
-            noise = noise * (1 - alpha_).sqrt()
+            eps = torch.randn_like(batch)
+            noise = eps * (1 - alpha_).sqrt()
             batch = batch * alpha_.sqrt() + noise
 
             y = model(batch, t)
-            loss = loss_fn(y, -noise)
+            loss = loss_fn(y, eps)
             loss = loss / acc_steps
 
             loss.backward()
@@ -154,17 +155,21 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             }, fn)
 
         if step % eval_interval == 0:
-            model_ = model_ema.module if model_ema is not None else model
-            trace = eval_model(opt, model_, device, opt.eval_timesteps, opt.eval_batch_size)
-            eval_latent = torch.cat(trace, dim=0)
-            eval_decode = decoder_model.decode_2d(eval_latent.cpu())
-            # log result to wandb
-            img_grid = torchvision.utils.make_grid(eval_decode.detach().cpu(), nrow=opt.eval_batch_size)
-            images = wandb.Image(img_grid, caption="Sampling Result")
-            wandb.log({"sampling": images})
-            fn = '{}_sampling_{:07d}.png'.format(opt.name, step)
-            show_and_save(fn, img_grid, show=False, save=True)
-            #show_batch(eval_decode, nrow=opt.eval_batch_size)
+            for name, model_ in [('base', model), ('ema', model_ema.module)]:
+                if model_ is None:
+                    continue
+
+                trace = eval_model(opt, model_, device, opt.eval_timesteps, opt.eval_batch_size)
+                eval_latent = torch.cat(trace, dim=0)
+                eval_decode = decoder_model.decode_2d(eval_latent.cpu())
+                # log result to wandb
+                img_grid = torchvision.utils.make_grid(eval_decode.detach().cpu(), nrow=opt.eval_batch_size)
+                images = wandb.Image(img_grid, caption="Sampling Result")
+                wandb.log({"sampling_" + name: images})
+                fn = '{}_sampling_{:07d}_{}.png'.format(opt.name, step, name)
+                show_and_save(fn, img_grid, show=False, save=True)
+
+                #show_batch(eval_decode, nrow=opt.eval_batch_size)
 
 
 def parse_args():
