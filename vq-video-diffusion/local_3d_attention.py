@@ -172,7 +172,7 @@ def test():
     y = n.forward(x)
     y.mean().backward()
     print(y.size())
-    
+
 
 if __name__ == '__main__':
     test()
