@@ -26,7 +26,7 @@ class VectorQuantizerEMA(nn.Module):
         # expected input shape is (batch x (latents x) embedding_dim)
         flat_input = input.reshape(-1, self.num_latents, self.embedding_dim)
 
-        # calculate absolute distances
+        # calculate distances
         distances = (flat_input.unsqueeze(-1) - self.embedding.transpose(1, 2).unsqueeze(0)).pow(2).sum(dim=-2)
 
         # get indices of minimum distances
@@ -75,7 +75,7 @@ class VectorQuantizerEMA(nn.Module):
         return quantized, encodings, commitment_loss, perplexity
     
     def codebook_distance(self, input, normalize=True):
-        flat_input = input.view(-1, self.num_latents, self.embedding_dim)
+        flat_input = input.reshape(-1, self.num_latents, self.embedding_dim)
         distances = (flat_input.unsqueeze(-1) - self.embedding.transpose(1, 2).unsqueeze(0)).pow(2).sum(dim=-2)
         if normalize:
             distances = distances / self.embedding_dim

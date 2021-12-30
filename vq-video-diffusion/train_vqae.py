@@ -42,6 +42,18 @@ class VqAutoEncoder(nn.Module):
 
         return self.decoder(quantized), latent_loss, perplexity
 
+    def encode(self, x):
+        h = self.encoder(x)
+        h = h.permute(0, 2, 3, 1)   # BCHW -> BHWC
+        indices = self.vq.encode(h).view(h.shape[:-1])
+        return indices
+
+    def decode(self, z):
+        h = self.vq.decode(z)
+        h = h.permute(0, 3, 1, 2)   # BHWC -> BCHW
+        x = self.decoder(h)
+        return x
+
 
 # parse bool args correctly, see https://stackoverflow.com/a/43357954
 def str2bool(v):
@@ -62,6 +74,7 @@ def parse_args():
     parser.add_argument('--manual_seed', default=0, type=int, help='initialization of pseudo-RNG')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
+    parser.add_argument('--weight_decay', default=0.0, type=float)
     parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
     parser.add_argument('--loss_fn', default='SmoothL1', type=str)
     parser.add_argument('--max_epochs', default=10, type=int)
@@ -85,17 +98,16 @@ def parse_args():
     # moving MNIST dataset parameters
     parser.add_argument('--data_root', default='data', help='root directory for data')
     parser.add_argument('--image_width', type=int, default=64, help='the height / width of the input image to network')
-    parser.add_argument('--n_past', type=int, default=5, help='number of frames to condition on')
-    parser.add_argument('--num_digits', type=int, default=3, help='number of digits for moving mnist')
+    parser.add_argument('--num_digits', type=int, default=5, help='number of digits for moving mnist')
     parser.add_argument('--digit_size', type=int, default=24, help='size of single moving digit')
 
     opt = parser.parse_args()
     return opt
 
 
-def show_batch(x):
+def show_batch(x, nrow=8):
     x = x.detach().cpu()
-    grid = torchvision.utils.make_grid(x)
+    grid = torchvision.utils.make_grid(x, nrow=nrow)
     plt.imshow(grid.numpy().transpose((1, 2, 0)))
     plt.axis('off')
     plt.show()
@@ -239,9 +251,9 @@ def main():
 
     learning_rate = opt.lr
     if opt.optimizer == 'AdamW':
-        optimizer = optim.AdamW(model.parameters(), lr=learning_rate, amsgrad=False)
+        optimizer = optim.AdamW(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
     elif opt.optimizer == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=False)
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
     else:
         raise RuntimeError('Unsupported optimizer specified.')
 
