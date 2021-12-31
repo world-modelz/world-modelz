@@ -5,6 +5,7 @@ import uuid
 
 #import matplotlib.pyplot as plt
 import wandb
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -18,6 +19,7 @@ from train_vqae import VqAutoEncoder, show_and_save, wandb_init, count_parameter
 from local_3d_attention import Local3dAttentionTransformer
 from warmup_scheduler import GradualWarmupScheduler
 from model_ema_v2 import ModelEmaV2
+from importance_sampling import LossAwareSamplerEma
 
 
 class VqVideoDiffusionModel(nn.Module):
@@ -100,8 +102,9 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     num_embeddings = decoder_model.vq.num_embeddings
 
     p_max_uniform = 0.1
-    independent_uniform = False
     mask_token_index = num_embeddings
+
+    sampler = LossAwareSamplerEma(num_histogram_buckets=100, uniform_p=0.01, alpha=0.9, warmup=10)
 
     model_ema = None # ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
     for step in range(1, max_steps+1):
@@ -134,11 +137,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             encoding = last_frame.reshape(batch_size, -1)
 
             # add noise and masking
-
-            # TODO: Add importance sampling
-
-            #r = torch.linspace(0, 1, batch_size, device=device).view(batch_size, 1)
-            r = torch.rand(batch_size, 1, device=device)
+            r = sampler.sample(batch_size).view(batch_size, 1).to(device)
 
             threshold = r.to(device)
             mask = torch.rand(batch_size, encoding.size(1), device=device) < threshold
@@ -161,6 +160,11 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
             loss = loss_fn(y.reshape(-1, num_embeddings), target.reshape(-1))
 
+            # compute per sample loss
+
+            per_sample_loss = loss.view(batch_size, -1).mean(dim=1)
+            sampler.update_with_losses(r, per_sample_loss)
+
             loss = loss.mean()
 
             loss.backward()
@@ -176,7 +180,11 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
         wandb.log({'loss': loss_sum, 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
 
-        print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}'.format(step, loss_sum, lr_scheduler.get_last_lr()[0], gn, epoch))
+        print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}; warmed_up: {}'.format(step, loss_sum, lr_scheduler.get_last_lr()[0], gn, epoch, sampler.warmed_up()))
+        
+        if step % 50 == 0:
+            print('sampler.weights(): ', sampler.weights())
+            wandb.log({ 'sampler_weights': wandb.Histogram(np_histogram=sampler.weights_as_numpy_histogram()) })
 
         if step % checkpoint_interval == 0:
             # write model_checkpoint
@@ -193,9 +201,10 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             }, fn)
 
         if step % eval_interval == 0:
-            for name, model_ in [('base', model), ('ema', model_ema.module)]:
-                if model_ is None:
-                    continue
+            eval_models = [('base', model)]
+            if model_ema is not None:
+                eval_models.append(('ema', model_ema.module))
+            for name, model_ in eval_models:
 
                 # TODO: eval
                 print('eval', name)
