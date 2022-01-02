@@ -54,7 +54,7 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
     for i in range(batch_size):
         j = random.randint(0, len(dataset)-1)
         batch[i] = torch.from_numpy(dataset[j]).permute(0,3,1,2)
-    
+
     batch = batch.to(device)
     print('batch', batch.size())
     batch_z = decoder_model.encode(batch.view(-1, 1, image_width, image_width))
@@ -99,7 +99,7 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
                 last_mask = mask
             else:
                 mask = (torch.rand(batch_size, w*w) > alpha)
-            
+
             #print('denoised_samples', denoised_samples.size())
             #print('batch_z', batch_z.size())
             #print('alpha', alpha)
@@ -110,7 +110,7 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
             last_frames.view(-1, w*w)[mask] = mask_token_index
 
             logits = model.forward(batch_z)
-        
+
         dec_denoised = decoder_model.decode(denoised_samples)
         generated_frames.append(dec_denoised.cpu())
         batch_z[:,0:-1] = batch_z[:,1:] # shift frames
@@ -124,7 +124,7 @@ def eval_model_and_save(*, save_combined=True, combined_fn='eval_result.png', sa
     img_grid = torchvision.utils.make_grid(eval_result, nrow=batch_size, pad_value=0.2)
     if save_combined:
         torchvision.utils.save_image(img_grid, combined_fn)
-    
+
     if save_frames:
         for i,frame in enumerate(eval_frames):
             fn = frames_fn.format(i)
@@ -171,6 +171,15 @@ def parse_args():
 
     parser.add_argument('--checkpoint', default=None, type=str)
     parser.add_argument('--eval', default=False, action='store_true')
+
+    # model params
+    parser.add_argument('--dim', default=256, type=int)
+    parser.add_argument('--extents', default='3,3,3', type=str, help='S,H,W, e.g. "3,3,3"')
+    parser.add_argument('--depth', default=4, type=int)
+    parser.add_argument('--mlp_dim', default=256, type=int)
+    parser.add_argument('--dim_head', default=128, type=int)
+    parser.add_argument('--heads', default=1, type=int)
+    parser.add_argument('--dropout', default=0, type=float)
 
     opt = parser.parse_args()
     return opt
@@ -278,7 +287,7 @@ def train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder
         wandb.log({'loss': loss_sum, 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
 
         print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}; warmed_up: {}'.format(step, loss_sum, lr_scheduler.get_last_lr()[0], gn, epoch, sampler.warmed_up()))
-        
+
         if step % 50 == 0:
             print('sampler.weights(): ', sampler.weights())
             wandb.log({ 'sampler_weights': wandb.Histogram(np_histogram=sampler.weights_as_numpy_histogram()) })
@@ -366,21 +375,39 @@ def main():
     x = decoder_model.decode(z)
     #show_batch(x)
 
-    model = VqVideoDiffusionModel(data_shape=(6,8,8), dim=128, num_classes=chkpt_opt.num_embeddings, extents=(3,3,3), depth=4, mlp_dim=256, dim_head=128)
+    extents = [int(s) for s in opt.extents.split(',')]
+    assert len(extents) == 3
+
+    current_opt = opt
+
+    # load model checkpoint
+    model_checkpoint = opt.checkpoint
+    checkpoint_data = None
+    if model_checkpoint is not None:
+        print('loading model checkpoint: ', model_checkpoint)
+        checkpoint_data = torch.load(model_checkpoint, map_location=device)
+        opt = checkpoint_data['opt']
+
+    model = VqVideoDiffusionModel(
+        data_shape=z.shape, # (6,8,8)
+        dim=opt.dim,
+        num_classes=chkpt_opt.num_embeddings,
+        extents=extents,
+        depth=opt.depth,
+        mlp_dim=opt.mlp_dim,
+        dim_head=opt.dim_head,
+        heads=opt.heads,
+        dropout=opt.dropout)
 
     count_parameters(model)
 
     model = model.to(device)
     decoder_model = decoder_model.to(device)
 
-    # load model checkpoint
-    model_checkpoint = opt.checkpoint
-    if model_checkpoint is not None:
-        print('loading model checkpoint: ', model_checkpoint)
-        checkpoint_data = torch.load(model_checkpoint, map_location=device)
+    if checkpoint_data is not None:
         model.load_state_dict(checkpoint_data['model_state_dict'])
 
-    if opt.eval:
+    if current_opt.eval:
         eval_model_and_save(
             save_combined=True,
             combined_fn='eval_result.png',
@@ -391,8 +418,8 @@ def main():
             decoder_model=decoder_model,
             num_embeddings=chkpt_opt.num_embeddings,
             mask_token_index=chkpt_opt.num_embeddings,
-            batch_size=opt.eval_batch_size,
-            num_steps=opt.eval_timesteps,
+            batch_size=current_opt.eval_batch_size,
+            num_steps=current_opt.eval_timesteps,
             n_past=opt.n_past,
             image_width=opt.image_width,
             dataset=dataset
