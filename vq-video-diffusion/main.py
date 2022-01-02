@@ -14,7 +14,7 @@ import torch.optim as optim
 import torchvision
 
 from data.moving_mnist import MovingMNIST
-from train_vqae import VqAutoEncoder, show_and_save, wandb_init, count_parameters, show_batch
+from train_vqae import VqAutoEncoder, wandb_init, count_parameters, show_batch
 
 from local_3d_attention import Local3dAttentionTransformer
 from warmup_scheduler import GradualWarmupScheduler
@@ -36,6 +36,100 @@ class VqVideoDiffusionModel(nn.Module):
         return self.logit_proj(last_frames)
 
 
+def top_k_logits(logits, k):
+        v, ix = torch.topk(logits, k, largest=True, sorted=True)
+        out = logits.clone()
+        out[out < v[:,[-1]]] = -float('Inf')
+        return out
+
+
+def clamp(x, lo, hi):
+    return min(max(x, lo), hi)
+
+
+@torch.no_grad()
+def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_index, batch_size, num_steps, n_past, image_width, dataset):
+    # get n_past context frames from dataset as during training
+    batch = torch.zeros(batch_size, n_past+1, 1, image_width, image_width)
+    for i in range(batch_size):
+        j = random.randint(0, len(dataset)-1)
+        batch[i] = torch.from_numpy(dataset[j]).permute(0,3,1,2)
+    
+    batch = batch.to(device)
+    print('batch', batch.size())
+    batch_z = decoder_model.encode(batch.view(-1, 1, image_width, image_width))
+    batch_z = batch_z.view(-1, batch.size(1), batch_z.size(1), batch_z.size(2)) # NxSxHxW
+    batch_z[:,-1] = mask_token_index # destroy all information in last frames
+    w = batch_z.size(-1)
+
+    generated_frames = [batch[:,-1].view(-1, 1, image_width, image_width).cpu().clone()]
+
+    num_eval_iterations = 25
+    sample_topk = -1
+    noise_schedule = None
+    consistent_masking = False
+
+    for i in range(num_steps):
+        print('Sampling frame {}/{}'.format(i+1, num_steps))
+
+        # sample next frame
+        logits = torch.zeros(batch_size, w*w, num_embeddings, device=device)    # start with equal weighted probabilities (flat)
+        logits_shape = logits.shape
+        last_mask = torch.zeros(batch_size, w*w) == 0
+
+        for i in range(num_eval_iterations):
+            logits = logits.view(-1, num_embeddings)
+
+             # sample
+            if sample_topk > 0:
+                logits = top_k_logits(logits, sample_topk)
+
+            p = F.softmax(logits, dim=-1)
+            denoised_samples = torch.multinomial(p, 1, True).view(batch_size, w, w)
+
+            frac = (i+1)/num_eval_iterations
+            if noise_schedule is not None:
+                alpha = noise_schedule(frac)
+            else:
+                alpha = frac
+
+            alpha = clamp(alpha, 0, 1)
+            if consistent_masking:
+                mask = last_mask & (torch.rand(batch_size, w*w) > alpha)
+                last_mask = mask
+            else:
+                mask = (torch.rand(batch_size, w*w) > alpha)
+            
+            #print('denoised_samples', denoised_samples.size())
+            #print('batch_z', batch_z.size())
+            #print('alpha', alpha)
+            #print('mask_count', mask.count_nonzero())
+
+            batch_z[:,-1,:,:] = denoised_samples
+            last_frames = batch_z[:,-1,:,:]
+            last_frames.view(-1, w*w)[mask] = mask_token_index
+
+            logits = model.forward(batch_z)
+        
+        dec_denoised = decoder_model.decode(denoised_samples)
+        generated_frames.append(dec_denoised.cpu())
+        batch_z[:,0:-1] = batch_z[:,1:] # shift frames
+
+    return torch.cat(generated_frames, dim=0), generated_frames
+
+
+def eval_model_and_save(*, save_combined=True, combined_fn='eval_result.png', save_frames=False, frames_fn='frame_{:04d}.png', batch_size=8, **kwargs):
+    eval_result, eval_frames = evaluate_model(batch_size=batch_size, **kwargs)
+    
+    for i,frame in enumerate(eval_frames):
+        fn = frames_fn.format(i)
+        torchvision.utils.save_image(frame, fn)
+
+    img_grid = torchvision.utils.make_grid(eval_result.detach().cpu(), nrow=batch_size, pad_value=0.2)
+    torchvision.utils.save_image(img_grid, combined_fn)
+    return img_grid
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default='cuda', type=str, help='device to use')
@@ -44,8 +138,8 @@ def parse_args():
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--batch_size', default=10, type=int, help='batch size')
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
-    parser.add_argument('--weight_decay', default=0.0, type=float)
-    parser.add_argument('--ema_decay', default=0.9999, type=float, help='ema decay of shadow model')
+    parser.add_argument('--weight_decay', default=1e-7, type=float)
+    parser.add_argument('--ema_decay', default=0, type=float, help='ema decay of shadow model, e.g. 0.999 or 0.9999')
 
     # moving MNIST dataset parameters
     parser.add_argument('--data_root', default='data', help='root directory for data')
@@ -62,7 +156,7 @@ def parse_args():
     parser.add_argument('--accumulation_steps', default=1, type=int)
     parser.add_argument('--checkpoint_interval', default=25000, type=int)
     parser.add_argument('--eval_interval', default=2000, type=int)
-    parser.add_argument('--eval_timesteps', default=25, type=int)
+    parser.add_argument('--eval_timesteps', default=4, type=int)
     parser.add_argument('--eval_batch_size', default=8, type=int)
 
     # wandb
@@ -71,6 +165,9 @@ def parse_args():
     parser.add_argument('--tags', default=None, type=str)
     parser.add_argument('--project', default='vq-video-diffusion', type=str, help='project name for wandb')
     parser.add_argument('--name', default='vq_diffusion_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+
+    parser.add_argument('--checkpoint', default=None, type=str)
+    parser.add_argument('--eval', default=False, action='store_true')
 
     opt = parser.parse_args()
     return opt
@@ -84,7 +181,7 @@ def grad_norm(model_params):
     return math.sqrt(sqsum)
 
 
-def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder_model):
+def train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder_model):
 
     batch_size = opt.batch_size
     experiment_name = opt.name
@@ -96,9 +193,6 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
     acc_steps = opt.accumulation_steps
     epoch = 0
 
-    model = model.to(device)
-    decoder_model = decoder_model.to(device)
-
     num_embeddings = decoder_model.vq.num_embeddings
 
     p_max_uniform = 0.1
@@ -106,7 +200,7 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
 
     sampler = LossAwareSamplerEma(num_histogram_buckets=100, uniform_p=0.01, alpha=0.9, warmup=10)
 
-    model_ema = None # ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
+    model_ema = ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
     for step in range(1, max_steps+1):
         model.train()
 
@@ -204,10 +298,27 @@ def  train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decode
             eval_models = [('base', model)]
             if model_ema is not None:
                 eval_models.append(('ema', model_ema.module))
-            for name, model_ in eval_models:
 
-                # TODO: eval
-                print('eval', name)
+            for model_name, model_ in eval_models:
+                print('eval ', step, model_name)
+                fn = '{}_eval_{:07d}_{}.png'.format(experiment_name, step, model_name)
+                img_grid = eval_model_and_save(
+                    save_combined=True,
+                    combined_fn=fn,
+                    save_frames=False,
+                    device=device,
+                    model=model_,
+                    decoder_model=decoder_model,
+                    num_embeddings=num_embeddings,
+                    mask_token_index=mask_token_index,
+                    batch_size=opt.eval_batch_size,
+                    num_steps=opt.eval_timesteps,
+                    n_past=opt.n_past,
+                    image_width=opt.image_width,
+                    dataset=dataset
+                )
+                images = wandb.Image(img_grid, caption='Reconstruction ' + model_name)
+                wandb.log({'reconstruction_' + model_name: images})
 
 
 def main():
@@ -224,7 +335,7 @@ def main():
     wandb_init(opt)
 
     # create data set
-    train_data = MovingMNIST(
+    dataset = MovingMNIST(
                 train=True,
                 data_root=opt.data_root,
                 seq_len=opt.n_past+1,
@@ -233,7 +344,7 @@ def main():
                 num_digits=opt.num_digits,
                 digit_size=opt.digit_size)
 
-    x = torch.from_numpy(train_data[random.randint(0, len(train_data)-1)])
+    x = torch.from_numpy(dataset[random.randint(0, len(dataset)-1)])
     #show_batch(x.permute(0,3,1,2))
 
     # load vq model (cpu)
@@ -256,11 +367,40 @@ def main():
 
     count_parameters(model)
 
+    model = model.to(device)
+    decoder_model = decoder_model.to(device)
+
+    # load model checkpoint
+    model_checkpoint = opt.checkpoint
+    if model_checkpoint is not None:
+        print('loading model checkpoint: ', model_checkpoint)
+        checkpoint_data = torch.load(model_checkpoint, map_location=device)
+        model.load_state_dict(checkpoint_data['model_state_dict'])
+
+    if opt.eval:
+        eval_model_and_save(
+            save_combined=True,
+            combined_fn='eval_result.png',
+            save_frames=True,
+            frames_fn='frame_{:04d}.png',
+            device=device,
+            model=model,
+            decoder_model=decoder_model,
+            num_embeddings=chkpt_opt.num_embeddings,
+            mask_token_index=chkpt_opt.num_embeddings,
+            batch_size=opt.eval_batch_size,
+            num_steps=opt.eval_timesteps,
+            n_past=opt.n_past,
+            image_width=opt.image_width,
+            dataset=dataset
+        )
+        return
+
     if opt.optimizer == 'AdamW':
         optimizer = optim.AdamW(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
     elif opt.optimizer == 'Adam':
         if opt.weight_decay > 0:
-            print('WARN: AAdam with weight_decay > 0')
+            print('WARN: Adam with weight_decay > 0')
         optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
     else:
         raise RuntimeError('Unsupported optimizer specified.')
@@ -270,7 +410,7 @@ def main():
 
     loss_fn = nn.CrossEntropyLoss(reduction='none')
 
-    train(opt, model, loss_fn, device, train_data, optimizer, lr_scheduler, decoder_model)
+    train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder_model)
 
 
 if __name__ == '__main__':
