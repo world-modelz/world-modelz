@@ -118,15 +118,18 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
     return torch.cat(generated_frames, dim=0), generated_frames
 
 
+@torch.no_grad()
 def eval_model_and_save(*, save_combined=True, combined_fn='eval_result.png', save_frames=False, frames_fn='frame_{:04d}.png', batch_size=8, **kwargs):
     eval_result, eval_frames = evaluate_model(batch_size=batch_size, **kwargs)
+    img_grid = torchvision.utils.make_grid(eval_result, nrow=batch_size, pad_value=0.2)
+    if save_combined:
+        torchvision.utils.save_image(img_grid, combined_fn)
     
-    for i,frame in enumerate(eval_frames):
-        fn = frames_fn.format(i)
-        torchvision.utils.save_image(frame, fn)
+    if save_frames:
+        for i,frame in enumerate(eval_frames):
+            fn = frames_fn.format(i)
+            torchvision.utils.save_image(frame, fn)
 
-    img_grid = torchvision.utils.make_grid(eval_result.detach().cpu(), nrow=batch_size, pad_value=0.2)
-    torchvision.utils.save_image(img_grid, combined_fn)
     return img_grid
 
 
