@@ -45,7 +45,7 @@ class Local3dAttention(nn.Module):
         self.attend = nn.Softmax(dim = -1)
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_k = nn.Linear(dim, inner_dim, bias=False)
-        self.to_v = nn.Linear(dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(dim, inner_dim, bias=True)
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim),
