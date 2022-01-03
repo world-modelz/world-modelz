@@ -255,10 +255,11 @@ def train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder
             draw = torch.multinomial(d.view(-1, num_embeddings), num_samples=1)
             draw = draw.view(batch_size, -1)
 
-            draw[mask] = mask_token_index -1 ##
+            draw[mask] = mask_token_index
             batch_z[:, -1] = draw.view(last_frame.shape)
 
             # inspect batch
+            #batch_z[batch_z >= num_embeddings] = 0
             #dec = decoder_model.decode(batch_z.view(-1, batch_z.shape[-2], batch_z.shape[-1]))
             #show_batch(dec, nrow=opt.n_past+1)
 
@@ -267,12 +268,12 @@ def train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder
             loss = loss_fn(y.reshape(-1, num_embeddings), target.reshape(-1))
 
             # compute per sample loss
-
             per_sample_loss = loss.view(batch_size, -1).mean(dim=1)
             sampler.update_with_losses(r, per_sample_loss)
 
             loss = loss.mean()
-            loss = loss / acc_steps
+            if acc_steps > 1:
+                loss = loss / acc_steps
 
             loss.backward()
 
