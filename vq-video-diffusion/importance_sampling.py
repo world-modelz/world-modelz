@@ -35,7 +35,7 @@ class LossAwareSamplerEma:
     def update_with_losses(self, ts, losses):
         ts = ts.view(-1).cpu()
         losses = losses.view(-1).cpu()
-        indices = (ts * self.num_histogram_buckets).long()
+        indices = (ts * self.num_histogram_buckets).long().clamp(0, self.num_histogram_buckets-1)
         self._counts.scatter_add_(0, indices, torch.ones_like(indices))
         for i,j in enumerate(indices):
             self._weights[j] = self._weights[j] * self.alpha + losses[i] * (1-self.alpha) 
