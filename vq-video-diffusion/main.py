@@ -272,6 +272,7 @@ def train(opt, model, loss_fn, device, dataset, optimizer, lr_scheduler, decoder
             sampler.update_with_losses(r, per_sample_loss)
 
             loss = loss.mean()
+            loss = loss / acc_steps
 
             loss.backward()
 
