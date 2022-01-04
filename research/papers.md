@@ -23,11 +23,7 @@
 - PVG/CADDY: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
 
 
-### Philosophic
-- [Free Will Belief as a consequence of Model-based Reinforcement Learning](https://arxiv.org/abs/2111.08435)
-
-
-## Video prediction
+## Video Prediction / Generation
 
 - 3DNA: [NÜWA: Visual Synthesis Pre-training for Neural visUal World creAtion](https://arxiv.org/abs/2111.12417), [Website](https://github.com/microsoft/NUWA)
 - VideoGPT: [VideoGPT: Video Generation using VQ-VAE and Transformers](https://arxiv.org/abs/2104.10157)
@@ -35,6 +31,7 @@
 - [Predicting Video with VQVAE](https://arxiv.org/abs/2103.01950)
 - [Clockwork Variational Autoencoders](https://arxiv.org/abs/2102.09532)
 - GHVAE: [Greedy Hierarchical Variational Autoencoders for Large-Scale Video Prediction](https://arxiv.org/abs/2103.04174), [Website](https://sites.google.com/view/ghvae)
+- StyleGAN-V: [StyleGAN-V: A Continuous Video Generator with the Price, Image Quality and Perks of StyleGAN2](https://arxiv.org/abs/2112.14683), [Website](https://universome.github.io/stylegan-v)
 
 
 ## RL
@@ -60,6 +57,7 @@
 - SRU++: [When Attention Meets Fast Recurrence:Training Language Models with Reduced Compute](https://arxiv.org/abs/2102.12459), [Website](https://www.asapp.com/blog/reducing-the-high-cost-of-training-nlp-models-with-sru/), code: [asappresearch/sru](https://github.com/asappresearch/sru)
 
 
+
 ## Interesting Other Stuff
 
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
@@ -67,6 +65,7 @@
 - Blog: [A Consciousness-Inspired Planning Agent for Model-Based Reinforcement Learning](https://mila.quebec/en/article/a-consciousness-inspired-planning-agent-for-model-based-reinforcement-learning/)
 - Blog: [World Models applied to Sonic](https://dylandjian.github.io/world-models/), code: [dylandjian/retro-contest-sonic](https://github.com/dylandjian/retro-contest-sonic)
 - Project: [Cracking PHYRE with a World Model](https://cse.buffalo.edu/~avereshc/rl_spring20/Sheng_Liu.pdf)
+- [Free Will Belief as a consequence of Model-based Reinforcement Learning](https://arxiv.org/abs/2111.08435)
 
 
 ## Acknowledgements
