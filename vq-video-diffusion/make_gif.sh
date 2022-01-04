@@ -1,3 +1,3 @@
 #!/bin/bash
 # using ImageMagick convert
-convert -delay 10 -loop 0 evalf*.png animation.gif
+convert -delay 10 -loop 0 frame_*.png animation.gif

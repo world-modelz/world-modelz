@@ -37,10 +37,10 @@ class VqVideoDiffusionModel(nn.Module):
 
 
 def top_k_logits(logits, k):
-        v, ix = torch.topk(logits, k, largest=True, sorted=True)
-        out = logits.clone()
-        out[out < v[:,[-1]]] = -float('Inf')
-        return out
+    v, ix = torch.topk(logits, k, largest=True, sorted=True)
+    out = logits.clone()
+    out[out < v[:,[-1]]] = -float('Inf')
+    return out
 
 
 def clamp(x, lo, hi):
@@ -48,7 +48,7 @@ def clamp(x, lo, hi):
 
 
 @torch.no_grad()
-def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_index, batch_size, num_steps, n_past, image_width, dataset):
+def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_index, batch_size, num_steps, n_past, image_width, dataset, sample_topk=-1):
     # get n_past context frames from dataset as during training
     batch = torch.zeros(batch_size, n_past+1, 1, image_width, image_width)
     for i in range(batch_size):
@@ -64,8 +64,7 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
 
     generated_frames = [batch[:,-1].view(-1, 1, image_width, image_width).cpu().clone()]
 
-    num_eval_iterations = 25
-    sample_topk = -1
+    num_eval_iterations = 30
     noise_schedule = None
     consistent_masking = False
 
@@ -113,7 +112,7 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
 
         dec_denoised = decoder_model.decode(denoised_samples)
         generated_frames.append(dec_denoised.cpu())
-        batch_z[:,0:-1] = batch_z[:,1:] # shift frames
+        batch_z[:,:-1] = batch_z[:,1:] # shift frames
 
     return torch.cat(generated_frames, dim=0), generated_frames
 
@@ -171,6 +170,7 @@ def parse_args():
 
     parser.add_argument('--checkpoint', default=None, type=str)
     parser.add_argument('--eval', default=False, action='store_true')
+    parser.add_argument('--topk', default=-1, type=int)
 
     # model params
     parser.add_argument('--dim', default=256, type=int)
@@ -361,6 +361,16 @@ def main():
     x = torch.from_numpy(dataset[random.randint(0, len(dataset)-1)])
     #show_batch(x.permute(0,3,1,2))
 
+    current_opt = opt
+
+    # load model checkpoint
+    model_checkpoint = opt.checkpoint
+    checkpoint_data = None
+    if model_checkpoint is not None:
+        print('loading model checkpoint: ', model_checkpoint)
+        checkpoint_data = torch.load(model_checkpoint, map_location=device)
+        opt = checkpoint_data['opt']
+
     # load vq model (cpu)
     print('Loading decoder_model: {}'.format(opt.decoder_model))
     decoder_data = torch.load(opt.decoder_model, map_location=torch.device('cpu'))
@@ -379,16 +389,6 @@ def main():
 
     extents = [int(s) for s in opt.extents.split(',')]
     assert len(extents) == 3
-
-    current_opt = opt
-
-    # load model checkpoint
-    model_checkpoint = opt.checkpoint
-    checkpoint_data = None
-    if model_checkpoint is not None:
-        print('loading model checkpoint: ', model_checkpoint)
-        checkpoint_data = torch.load(model_checkpoint, map_location=device)
-        opt = checkpoint_data['opt']
 
     model = VqVideoDiffusionModel(
         data_shape=z.shape, # (6,8,8)
@@ -424,7 +424,8 @@ def main():
             num_steps=current_opt.eval_timesteps,
             n_past=opt.n_past,
             image_width=opt.image_width,
-            dataset=dataset
+            dataset=dataset,
+            sample_topk=current_opt.topk
         )
         return
 
