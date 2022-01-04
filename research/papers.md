@@ -32,6 +32,7 @@
 - [Clockwork Variational Autoencoders](https://arxiv.org/abs/2102.09532)
 - GHVAE: [Greedy Hierarchical Variational Autoencoders for Large-Scale Video Prediction](https://arxiv.org/abs/2103.04174), [Website](https://sites.google.com/view/ghvae)
 - StyleGAN-V: [StyleGAN-V: A Continuous Video Generator with the Price, Image Quality and Perks of StyleGAN2](https://arxiv.org/abs/2112.14683), [Website](https://universome.github.io/stylegan-v)
+- MAU: [MAU: A Motion-Aware Unit for Video Prediction and Beyond](https://proceedings.neurips.cc/paper/2021/hash/e25cfa90f04351958216f97e3efdabe9-Abstract.html)
 
 
 ## RL
@@ -60,6 +61,7 @@
 
 ## Interesting Other Stuff
 
+- Papers With Code: [Video Prediction](https://paperswithcode.com/task/video-prediction)
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
 - Blog: [Debugging Deep Model-based Reinforcement Learning Systems](https://www.natolambert.com/writing/debugging-mbrl)
 - Blog: [A Consciousness-Inspired Planning Agent for Model-Based Reinforcement Learning](https://mila.quebec/en/article/a-consciousness-inspired-planning-agent-for-model-based-reinforcement-learning/)
