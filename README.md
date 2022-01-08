@@ -12,7 +12,8 @@ If you have suggestions, proposals, comments or questions please don't hesitate 
 
 ## Experiments
 
-[som-diffusion](./som-diffusion/README.md)
+- [vq-video-diffusion](./vq-video-diffusion/README.md) ([results](./vq-video-diffusion/results/README.md))
+- [som-diffusion](./som-diffusion/README.md) (failed, discontinued)
 
 
 ## Maintainer
