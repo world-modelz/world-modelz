@@ -20,7 +20,8 @@
 - OP3: [Entity Abstraction in Visual Model-Based Reinforcement Learning](https://arxiv.org/abs/1910.12827)
 - AWML: [Active World Model Learning with Progress Curiosity](https://arxiv.org/abs/2007.07853)
 - SCOFF: [Object Files and Schemata: Factorizing Declarative and Procedural Knowledge in Dynamical Systems](https://arxiv.org/abs/2006.16225)
-- PVG/CADDY: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
+- PVG/CADDY: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code: [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
+- LEXA: [Discovering and Achieving Goals via World Models](https://arxiv.org/abs/2110.09514), [Website](https://orybkin.github.io/lexa/), code: [orybkin/lexa](https://github.com/orybkin/lexa)
 
 
 ## Video Prediction / Generation
@@ -78,3 +79,4 @@ I would like to thank the following people for suggesting papers and links:
 - Alexander Nikolin
 - jat
 - OGeneral
+- augustocsc
