@@ -22,6 +22,7 @@
 - SCOFF: [Object Files and Schemata: Factorizing Declarative and Procedural Knowledge in Dynamical Systems](https://arxiv.org/abs/2006.16225)
 - PVG/CADDY: [Playable Video Generation](https://arxiv.org/abs/2101.12195), [Website](https://willi-menapace.github.io/playable-video-generation-website/), code: [willi-menapace/PlayableVideoGeneration](https://github.com/willi-menapace/PlayableVideoGeneration)
 - LEXA: [Discovering and Achieving Goals via World Models](https://arxiv.org/abs/2110.09514), [Website](https://orybkin.github.io/lexa/), code: [orybkin/lexa](https://github.com/orybkin/lexa)
+- Plan2Explore: [Planning to Explore via Self-Supervised World Models](https://arxiv.org/abs/2005.05960), [Website](https://ramanans1.github.io/plan2explore/), code: [ramanans1/plan2explore](https://github.com/ramanans1/plan2explore)
 
 
 ## Video Prediction / Generation
