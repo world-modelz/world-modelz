@@ -29,6 +29,7 @@
 ## Video Prediction / Generation
 
 - FDM: [Flexible Diffusion Modeling of Long Videos](https://arxiv.org/abs/2205.11495)
+- VDM: [Video Diffusion Models](https://arxiv.org/abs/2204.03458), web: [Website](https://video-diffusion.github.io/)
 - MSPred: [Video Prediction at Multiple Scales with Hierarchical Recurrent Networks](https://arxiv.org/abs/2203.09303), web: [Website](https://sites.google.com/view/mspred/home)
 - 3DNA: [NÜWA: Visual Synthesis Pre-training for Neural visUal World creAtion](https://arxiv.org/abs/2111.12417), web: [Website](https://github.com/microsoft/NUWA)
 - VideoGPT: [VideoGPT: Video Generation using VQ-VAE and Transformers](https://arxiv.org/abs/2104.10157)
@@ -42,6 +43,7 @@
 
 ## RL
 
+- Diffuser: [Planning with Diffusion for Flexible Behavior Synthesis](https://arxiv.org/abs/2205.09991), web: [Website](https://diffusion-planning.github.io/), code: [jannerm/diffuser](https://github.com/jannerm/diffuser)
 - [Model-based Reinforcement Learning: A Survey](https://arxiv.org/abs/2006.16712v3)
 - relational unit (self-attention): [Relational Deep Reinforcement Learning](https://arxiv.org/abs/1806.01830)
 - XLand: [Open-Ended Learning Leads to Generally Capable Agents](https://arxiv.org/abs/2107.12808), [Blog](https://deepmind.com/blog/article/generally-capable-agents-emerge-from-open-ended-play), [Video](https://youtu.be/lTmL7jwFfdw)
