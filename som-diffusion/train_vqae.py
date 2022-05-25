@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument('--manual_seed', default=0, type=int, help='initialization of pseudo-RNG')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
+    parser.add_argument('--weight_decay', default=1e-4, type=float)
     parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
     parser.add_argument('--loss_fn', default='SmoothL1', type=str)
     parser.add_argument('--max_epochs', default=10, type=int)
@@ -83,7 +84,7 @@ def parse_args():
     parser.add_argument('--entity', default='andreaskoepf', type=str)
     parser.add_argument('--tags', default=None, type=str)
     parser.add_argument('--project', default='vqae', type=str, help='project name for wandb')
-    parser.add_argument('--name', default='vquae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+    parser.add_argument('--name', default='vqae_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
 
     opt = parser.parse_args()
     return opt
@@ -191,7 +192,7 @@ def train(opt, model, loss_fn, device, data_loader, optimizer, lr_scheduler):
             if step % vq_reuse_interval == 0:
                 c = model.vq.reuse_inactive()
                 log_data['reused'] = c
-                print('resued: ', c.item())
+                print('resued: ', c)
                 model.vq.reset_stats()
 
             wandb.log(log_data)
@@ -281,9 +282,9 @@ def main():
 
     learning_rate = opt.lr
     if opt.optimizer == 'AdamW':
-        optimizer = optim.AdamW(model.parameters(), lr=learning_rate, amsgrad=False)
+        optimizer = optim.AdamW(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
     elif opt.optimizer == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=False)
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
     else:
         raise RuntimeError('Unsupported optimizer specified.')
 

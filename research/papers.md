@@ -29,6 +29,7 @@
 ## Video Prediction / Generation
 
 - FDM: [Flexible Diffusion Modeling of Long Videos](https://arxiv.org/abs/2205.11495)
+- MSPred: [Video Prediction at Multiple Scales with Hierarchical Recurrent Networks](https://arxiv.org/abs/2203.09303), web: [Website](https://sites.google.com/view/mspred/home)
 - 3DNA: [NÜWA: Visual Synthesis Pre-training for Neural visUal World creAtion](https://arxiv.org/abs/2111.12417), web: [Website](https://github.com/microsoft/NUWA)
 - VideoGPT: [VideoGPT: Video Generation using VQ-VAE and Transformers](https://arxiv.org/abs/2104.10157)
 - FitVid: [FitVid: Overfitting in Pixel-Level Video Prediction](https://arxiv.org/abs/2106.13195)
