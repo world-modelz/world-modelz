@@ -1,7 +1,9 @@
+from concurrent.futures import thread
 import math
 import random
 import argparse
 import uuid
+import threading
 
 #import matplotlib.pyplot as plt
 import wandb
@@ -66,6 +68,11 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
     batch = batch.to(device)
     print('batch', batch.size())
     batch_z = decoder_model.encode(batch.view(-1, 3, image_width, image_width))
+
+    # check batch
+    #reconstructed = decoder_model.decode(batch_z)
+    #show_batch(reconstructed)
+
     batch_z = batch_z.view(-1, batch.size(1), batch_z.size(1), batch_z.size(2)) # NxSxHxW
     batch_z[:,-1] = mask_token_index # destroy all information in last frames
     w = batch_z.size(-1)
@@ -82,13 +89,13 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
         # sample next frame
         logits = torch.zeros(batch_size, w*w, num_embeddings, device=device)    # start with equal weighted probabilities (flat)
         logits_shape = logits.shape
-        last_mask = torch.zeros(batch_size, w*w) == 0
+        last_mask = torch.zeros(batch_size, w, w) == 0
 
         for i in range(num_eval_iterations):
             logits = logits.view(-1, num_embeddings)
 
              # sample
-            if sample_topk > 0:
+            if sample_topk > 0 and i > 0:
                 logits = top_k_logits(logits, sample_topk)
 
             p = F.softmax(logits, dim=-1)
@@ -102,25 +109,25 @@ def evaluate_model(*, device, model, decoder_model, num_embeddings, mask_token_i
 
             alpha = clamp(alpha, 0, 1)
             if consistent_masking:
-                mask = last_mask & (torch.rand(batch_size, w*w) > alpha)
+                mask = last_mask & (torch.rand(batch_size, w, w) > alpha)
                 last_mask = mask
             else:
-                mask = (torch.rand(batch_size, w*w) > alpha)
+                mask = (torch.rand(batch_size, w, w) > alpha)
 
             #print('denoised_samples', denoised_samples.size())
             #print('batch_z', batch_z.size())
             #print('alpha', alpha)
             #print('mask_count', mask.count_nonzero())
 
+            denoised_samples[mask] = mask_token_index
             batch_z[:,-1,:,:] = denoised_samples
-            last_frames = batch_z[:,-1,:,:]
-            last_frames.view(-1, w*w)[mask] = mask_token_index
-
+        
             logits = model.forward(batch_z)
 
         dec_denoised = decoder_model.decode(denoised_samples)
         generated_frames.append(dec_denoised.cpu())
         batch_z[:,:-1] = batch_z[:,1:] # shift frames
+        batch_z[:,-1] = mask_token_index
 
     return torch.cat(generated_frames, dim=0), generated_frames
 
@@ -167,8 +174,8 @@ def parse_args():
     parser.add_argument('--wandb', default=False, action='store_true')
     parser.add_argument('--entity', default='andreaskoepf', type=str)
     parser.add_argument('--tags', default=None, type=str)
-    parser.add_argument('--project', default='vq-video-diffusion', type=str, help='project name for wandb')
-    parser.add_argument('--name', default='vq_diffusion_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+    parser.add_argument('--project', default='mcvq-video-diffusion', type=str, help='project name for wandb')
+    parser.add_argument('--name', default='mcvq_diffusion_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
 
     parser.add_argument('--checkpoint', default=None, type=str)
     parser.add_argument('--eval', default=False, action='store_true')
@@ -285,7 +292,7 @@ def train(opt, model, loss_fn, device, batch_sampler, optimizer, lr_scheduler, d
         if model_ema is not None:
             model_ema.update(model)
 
-        wandb.log({'loss': loss_sum, 'lr': lr_scheduler.get_last_lr()[0], 'grand_norm': gn})
+        wandb.log({'loss': loss_sum, 'lr': lr_scheduler.get_last_lr()[0], 'grad_norm': gn})
 
         print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; epoch: {}; warmed_up: {}'.format(step, loss_sum, lr_scheduler.get_last_lr()[0], gn, epoch, sampler.warmed_up()))
 
@@ -369,8 +376,11 @@ class BufferedTrajSampler:
         self.max_segment_length = max_segment_length
         self.example_offsets = []
         self.example_index = 0
+        self.fill_thread = None
 
-    def fill_buffer(self):
+        self.start_fill_buffer()
+
+    def fill_buffer_thread(self):
         
         total_frames = 0
         segments = []
@@ -424,11 +434,23 @@ class BufferedTrajSampler:
 
             #print(f'total_frames: {total_frames}; examples: {len(example_offsets)}')
 
-        self.segments = segments
+        self.next_segments = segments
         p = np.random.permutation(len(example_offsets))
-        self.example_offsets = [example_offsets[k] for k in p] 
+        self.next_example_offsets = [example_offsets[k] for k in p]
+
+    def start_fill_buffer(self):
+        if self.fill_thread is None:
+            self.fill_thread = threading.Thread(target=self.fill_buffer_thread, daemon=True)
+            self.fill_thread.start()
+
+    def wait_for_next_buffer(self):
+        self.fill_thread.join()
+        self.segments = self.next_segments
+        self.example_offsets = self.next_example_offsets
         self.example_index = 0
 
+        self.fill_thread = None
+        self.start_fill_buffer()
 
     def sample_batch(self, batch_size):
         l = self.traj_len
@@ -438,7 +460,7 @@ class BufferedTrajSampler:
         
         for i in range(batch_size):
             if self.example_index >= len(self.example_offsets):
-                self.fill_buffer()
+                self.wait_for_next_buffer()
             
             segment, offset = self.example_offsets[self.example_index]
             self.example_index += 1
@@ -530,8 +552,6 @@ def main():
             mask_token_index=chkpt_opt.num_embeddings,
             batch_size=current_opt.eval_batch_size,
             num_steps=current_opt.eval_timesteps,
-            n_past=opt.n_past,
-            image_width=opt.image_width,
             batch_sampler=batch_sampler,
             sample_topk=current_opt.topk
         )
