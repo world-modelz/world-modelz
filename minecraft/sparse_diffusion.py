@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torchvision
 
 from train_vqae import VqAutoEncoder, wandb_init, count_parameters, show_batch
 from buffered_traj_sampler import BufferedTrajSampler
@@ -77,6 +78,68 @@ class VqSparseDiffusionModel(nn.Module):
         return self.logit_proj(x)
 
 
+def clamp(x, lo, hi):
+    return min(max(x, lo), hi)
+
+
+@torch.no_grad()
+def decode(decoder_model, batch, decode_N=16):
+    batch = batch.clone()
+    batch[batch >= decoder_model.vq.num_embeddings] = 0
+
+    frames = []
+    batch_shape = batch.shape
+    batch_flat = batch.view(-1, batch_shape[2], batch_shape[3])
+    
+    n = batch_flat.shape[0]
+    for i in range(0, n, decode_N):
+        sub_batch = batch_flat[i:i+decode_N]
+        frame = decoder_model.decode(sub_batch)
+        frames.append(frame)
+
+    frames = torch.cat(frames)
+    frames = frames.view(batch_shape[0], -1, *frames.shape[1:])
+
+    return frames
+
+
+@torch.no_grad()
+def evaluate_model(device, batch_size, model, decoder_model, shape, num_context = 512, num_eval_iterations = 2000):
+    num_embeddings = decoder_model.vq.num_embeddings
+    mask_token_index = num_embeddings
+
+    S, H, W = shape
+
+    full_z = torch.empty(batch_size, S, H, W, device=device, dtype=torch.long)
+    full_z.fill_(mask_token_index)
+    full_z_flat = full_z.view(batch_size, -1)
+
+    for i in range(num_eval_iterations):
+
+        # sample input
+        indices = sample_flat_positions(batch_size, num_context, S, H, W, device).to(device)
+        input = torch.gather(full_z_flat, dim=1, index=indices)
+
+        frac = (i+1)/num_eval_iterations
+        alpha = frac
+        alpha = clamp(alpha, 0, 1)
+        mask = (torch.rand_like(input, dtype=torch.float) > alpha)
+        input[mask] = mask_token_index
+
+        # denoise
+        logits = model.forward(input, indices).view(-1, num_embeddings)
+
+        p = F.softmax(logits, dim=-1)
+        denoised_samples = torch.multinomial(p, 1, True)    # B*num_context, 1
+        denoised_samples = denoised_samples.view(input.shape)
+
+        # write back to full_z_flat
+        full_z_flat.scatter_(dim=1, index=indices, src=denoised_samples)
+    
+    decoded_frames = decode(decoder_model, full_z)
+    return decoded_frames
+        
+
 def main():
     print('Using pytorch version {}'.format(torch.__version__))
 
@@ -103,7 +166,7 @@ def main():
 
     batch_size = 32
     max_steps = 10000
-    S, H, W = 32, 16, 16
+    S, H, W = 32, 16, 16    # total size of a video segment to generate, e.g. 32 frames of 16x16 latent codes
 
     num_embeddings = decoder_model.vq.num_embeddings
     mask_token_index = num_embeddings
@@ -112,7 +175,7 @@ def main():
     mlp_dim = dim*2
     heads = 4
     depth = 8
-    num_context = 512
+    num_context = 512   # number of tokens to pass through the transformer at once
 
     traj_sampler = BufferedTrajSampler(
         environment_names, mlr_data_dir, buffer_size=5000, max_segment_length=2000, traj_len=S, skip_frames=2)
@@ -133,6 +196,9 @@ def main():
 
     decoder_model.to(device)
 
+    single_batch = True
+    eval_interval = 500
+
     for step in range(1, max_steps):
         model.train()
         optimizer.zero_grad()
@@ -141,7 +207,7 @@ def main():
             batch_size, num_context, S, H, W, device)
         #print('indices', indices)
 
-        if step % 32 == 1:
+        if (not single_batch and step % 32 == 1) or step == 1:
             # quantize data
             with torch.no_grad():
                 # load frames from mine rl-dataset
@@ -197,6 +263,12 @@ def main():
         # backward
         loss.backward()
         optimizer.step()
+
+        if step % eval_interval == 0:
+            decoded_frames = evaluate_model(device, 8, model, decoder_model, (S, H, W))
+            img_grid = torchvision.utils.make_grid(decoded_frames.view(-1, *decoded_frames.shape[2:]), nrow=batch_size, pad_value=0.2)
+            combined_fn = f'combo_{step:08d}.png'
+            torchvision.utils.save_image(img_grid, combined_fn)
 
         print(f'{step}: loss: {loss.item()}')
 
