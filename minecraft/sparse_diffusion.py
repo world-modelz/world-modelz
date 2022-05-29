@@ -191,13 +191,13 @@ def main():
     mlr_data_dir = "/mnt/minerl"
     environment_names = ["MineRLTreechop-v0"]
 
-    batch_size = 64
-    max_steps = 50000
+    batch_size = 128
+    max_steps = 100000
     warmup = 500
     # total size of a video segment to generate, e.g. 32 frames of 16x16 latent codes
     S, H, W = 32, 16, 16
 
-    single_batch = True
+    single_batch = False
     eval_interval = 1000
 
     num_embeddings = decoder_model.vq.num_embeddings
@@ -244,10 +244,6 @@ def main():
         optimizer, multiplier=1.0, total_epoch=warmup, after_scheduler=scheduler_cosine
     )
 
-    # batch_z = batch_z.view(-1, batch.size(1), batch_z.size(1), batch_z.size(2)) # NxSxHxW
-    # latent_shape = batch_z.shape
-    # print('latent_shape', latent_shape)
-
     decoder_model.to(device)
 
     for step in range(1, max_steps):
@@ -272,9 +268,10 @@ def main():
                 for i in range(0, n, encode_N):
                     batch_z[i : i + encode_N] = decoder_model.encode(batch_flat[i : i + encode_N].to(device))
 
-                gt = decode(decoder_model, batch_z.view(batch_size, S, H, W))
-                img_grid = torchvision.utils.make_grid(gt.view(-1, *gt.shape[2:]), nrow=S, pad_value=0.2)
-                torchvision.utils.save_image(img_grid, "gt.png")
+                if single_batch:
+                    gt = decode(decoder_model, batch_z.view(batch_size, S, H, W))
+                    img_grid = torchvision.utils.make_grid(gt.view(-1, *gt.shape[2:]), nrow=S, pad_value=0.2)
+                    torchvision.utils.save_image(img_grid, "gt.png")
 
         batch_z_flat = batch_z.view(batch_size, -1)
         input = torch.gather(batch_z_flat, dim=1, index=indices)
@@ -332,7 +329,8 @@ def main():
             combined_fn = f"combo_{step:08d}.png"
             torchvision.utils.save_image(img_grid, combined_fn)
 
-        print(f"{step}: loss: {loss.item()}")
+        if step % 10 == 0:
+            print(f"{step}: loss: {loss.item()}")
 
 
 if __name__ == "__main__":
