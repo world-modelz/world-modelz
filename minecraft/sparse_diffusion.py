@@ -122,7 +122,7 @@ def evaluate_model(
     decoder_model,
     shape,
     num_context=512,
-    num_eval_iterations=200,
+    num_eval_iterations=100,
 ):
     num_embeddings = decoder_model.vq.num_embeddings
     mask_token_index = num_embeddings
@@ -133,6 +133,7 @@ def evaluate_model(
     full_z.fill_(mask_token_index)
     full_z_flat = full_z.view(batch_size, -1)
 
+    model.eval()
     for i in range(num_eval_iterations):
         max_index = S * H * W
 
@@ -208,12 +209,14 @@ def main():
     heads = 4
     depth = 8
     num_context = 512  # number of tokens to pass through the transformer at once
+    buffer_size = 75000
+    change_batch_interval = 4 # 32
 
     traj_sampler = BufferedTrajSampler(
         environment_names,
         mlr_data_dir,
-        buffer_size=5000,
-        max_segment_length=2000,
+        buffer_size=buffer_size,
+        max_segment_length=1000,
         traj_len=S,
         skip_frames=2,
     )
@@ -253,7 +256,7 @@ def main():
         indices = sample_flat_positions(batch_size, num_context, S, H, W, device)
         # print('indices', indices)
 
-        if (not single_batch and step % 32 == 1) or step == 1:
+        if (not single_batch and step % change_batch_interval == 1) or step == 1:
             # quantize data
             with torch.no_grad():
                 # load frames from mine rl-dataset
