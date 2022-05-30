@@ -216,7 +216,7 @@ def parse_args():
     parser.add_argument("--device", default="cuda", type=str, help="device to use")
     parser.add_argument("--device_index", default=0, type=int, help="device index")
     parser.add_argument("--manual_seed", default=42, type=int, help="initialization of pseudo-RNG")
-    parser.add_argument("--lr", default=1e-4, type=float, help="learning rate")
+    parser.add_argument("--lr", default=5e-5, type=float, help="learning rate")
     parser.add_argument("--batch_size", default=48, type=int)
     parser.add_argument("--eval_batch_size", default=8, type=int)
     parser.add_argument("--save_frames", default=False, action='store_true')
@@ -229,8 +229,8 @@ def parse_args():
     parser.add_argument("--decoder_model", default="mcvq8_1k_checkpoint_0010000.pth", type=str)
 
     parser.add_argument("--mlr_data_dir", default="/data/datasets/minerl", type=str)  # "/mnt/minerl"
-    
     #environment_names = ["MineRLTreechop-v0"]
+
     parser.add_argument("--S", default=32, type=int, help="trajectory length")
     parser.add_argument("--H", default=16, type=int)
     parser.add_argument("--W", default=16, type=int)
@@ -499,7 +499,7 @@ def main():
         if step % 10 == 0:
             print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; warmed_up: {}'.format(step, loss, lr_scheduler.get_last_lr()[0], gn, noise_sampler.warmed_up()))
 
-        if step % 50 == 0:
+        if step % 100 == 0:
             #print('sampler.weights(): ', noise_sampler.weights())
             wandb.log({ 'sampler_weights': wandb.Histogram(np_histogram=noise_sampler.weights_as_numpy_histogram()) })
 
