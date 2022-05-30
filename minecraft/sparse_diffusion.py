@@ -1,8 +1,13 @@
+from email.policy import default
 import math
 import argparse
 from json import decoder
+from multiprocessing.sharedctypes import Value
 import random
 from pathlib import Path
+import uuid
+
+import wandb
 
 import torch
 import torch.nn as nn
@@ -15,6 +20,7 @@ from buffered_traj_sampler import BufferedTrajSampler
 from transformer import Transformer
 from importance_sampling import LossAwareSamplerEma
 from warmup_scheduler import GradualWarmupScheduler
+from model_ema_v2 import ModelEmaV2
 
 
 def transform_batch(b):
@@ -23,19 +29,6 @@ def transform_batch(b):
     if isinstance(x, torch.ByteTensor):
         x = x.to(dtype=torch.float32).div(255)
     return x
-
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cuda", type=str, help="device to use")
-    parser.add_argument("--device_index", default=0, type=int, help="device index")
-    parser.add_argument("--manual_seed", default=42, type=int, help="initialization of pseudo-RNG")
-    parser.add_argument("--lr", default=1e-4, type=float, help="learning rate")
-    parser.add_argument("--weight_decay", default=1e-7, type=float)
-    parser.add_argument("--decoder_model", default="mcvq8_1k_checkpoint_0010000.pth", type=str)
-
-    opt = parser.parse_args()
-    return opt
 
 
 def sample_flat_positions(batch_size, context_length, s, h, w, device):
@@ -153,6 +146,7 @@ def evaluate_model(
     model,
     decoder_model,
     shape,
+    sampling_type,
     num_context=512,
     num_eval_iterations=100,
 ):
@@ -169,7 +163,7 @@ def evaluate_model(
     for i in range(num_eval_iterations):
         max_index = S * H * W
 
-        #all_indices_perm = torch.randperm(max_index, device=device).repeat(batch_size, 1)
+        all_indices_perm = torch.randperm(max_index, device=device).repeat(batch_size, 1)
 
         frac = i / (num_eval_iterations - 1)
 
@@ -179,11 +173,14 @@ def evaluate_model(
 
         for k in range(offset_count):
             # sample input
-            #j = k * max_index
-            #indices = all_indices_perm[:, j : j + num_context]
-
-            o = (offset_order[k].float() / (offset_count-1)).repeat(batch_size)
-            indices = sample_time_dependent(batch_size, num_context, S, H, W, torch.ones(batch_size) * (1.0-frac), device, o=o)
+            if sampling_type == 'uniform':
+                j = k * max_index
+                indices = all_indices_perm[:, j : j + num_context]
+            elif sampling_type == 'neighbors':
+                o = (offset_order[k].float() / (offset_count-1)).repeat(batch_size)
+                indices = sample_time_dependent(batch_size, num_context, S, H, W, torch.ones(batch_size) * (1.0-frac), device, o=o)
+            else:
+                raise ValueError('Specified sampling_type not supported')
 
             input = torch.gather(full_z_flat, dim=1, index=indices)
 
@@ -204,6 +201,70 @@ def evaluate_model(
 
     decoded_frames = decode(decoder_model, full_z)
     return decoded_frames
+
+
+@torch.no_grad()
+def grad_norm(model_params):
+    sqsum = 0.0
+    for p in model_params:
+        sqsum += (p.grad ** 2).sum().item()
+    return math.sqrt(sqsum)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--device", default="cuda", type=str, help="device to use")
+    parser.add_argument("--device_index", default=0, type=int, help="device index")
+    parser.add_argument("--manual_seed", default=42, type=int, help="initialization of pseudo-RNG")
+    parser.add_argument("--lr", default=1e-4, type=float, help="learning rate")
+    parser.add_argument("--batch_size", default=48, type=int)
+    parser.add_argument("--eval_batch_size", default=8, type=int)
+    parser.add_argument("--save_frames", default=False, action='store_true')
+    parser.add_argument("--max_steps", default=500 * 1000, type=int)
+    parser.add_argument("--warmup", default=500, type=int)
+    parser.add_argument("--weight_decay", default=1e-7, type=float)
+    parser.add_argument('--optimizer', default='AdamW', type=str, help='Optimizer to use (Adam, AdamW)')
+    parser.add_argument('--ema_decay', default=0, type=float, help='ema decay of shadow model, e.g. 0.999 or 0.9999')
+
+    parser.add_argument("--decoder_model", default="mcvq8_1k_checkpoint_0010000.pth", type=str)
+
+    parser.add_argument("--mlr_data_dir", default="/data/datasets/minerl", type=str)  # "/mnt/minerl"
+    
+    #environment_names = ["MineRLTreechop-v0"]
+    parser.add_argument("--S", default=32, type=int, help="trajectory length")
+    parser.add_argument("--H", default=16, type=int)
+    parser.add_argument("--W", default=16, type=int)
+
+    parser.add_argument("--single_batch", default=False, action='store_true')
+    parser.add_argument("--eval_interval", default=1000, type=int)
+    parser.add_argument('--checkpoint_interval', default=25000, type=int)
+    parser.add_argument("--sampling_type", default='neighbors', type=str, help='uniform|neighbors')
+    parser.add_argument("--p_max_uniform", default=0.1)
+
+    # sampling
+    parser.add_argument("--buffer_size", default=75000, type=int)
+    parser.add_argument("--max_segment_length", default=1000, type=int)
+    parser.add_argument("--skip_frames", default=2, type=int)
+    
+    # model parameters
+    parser.add_argument("--dim", default=512, type=int)
+    parser.add_argument("--mlp_dim", default=512 * 2, type=int)
+    parser.add_argument("--heads", default=4, type=int)
+    parser.add_argument("--depth", default=8, type=int)
+    parser.add_argument("--num_context", default=512, type=int, help="number of tokens to pass through the transformer at once")
+    parser.add_argument("--change_batch_interval", default=4, type=int) # 32
+
+    # wandb
+    parser.add_argument('--wandb', default=False, action='store_true')
+    parser.add_argument('--entity', default='andreaskoepf', type=str)
+    parser.add_argument('--tags', default=None, type=str)
+    parser.add_argument('--project', default='sparse_diffusion', type=str, help='project name for wandb')
+    parser.add_argument('--name', default='sd_' + uuid.uuid4().hex, type=str, help='wandb experiment name')
+
+    parser.add_argument('--output_dir', default='./', type=str)
+
+    opt = parser.parse_args()
+    return opt
 
 
 def main():
@@ -229,38 +290,42 @@ def main():
         in_channels=3,
     )
     decoder_model.load_state_dict(decoder_data["model_state_dict"])
-    print("ok")
-
-    mlr_data_dir = "/data/datasets/minerl"  # "/mnt/minerl"
-    environment_names = ["MineRLTreechop-v0"]
-
-    batch_size = 16 # 48
-    max_steps = 100000
-    warmup = 0 # 500
-    # total size of a video segment to generate, e.g. 32 frames of 16x16 latent codes
-    S, H, W = 32, 16, 16
-
-    single_batch = True # False
-    eval_interval = 1000
-
+   
     num_embeddings = decoder_model.vq.num_embeddings
     mask_token_index = num_embeddings
-    p_max_uniform = 0.1
-    dim = 512
-    mlp_dim = dim * 2
-    heads = 4
-    depth = 8
-    num_context = 512  # number of tokens to pass through the transformer at once
-    buffer_size = 5000 # 75000
-    change_batch_interval = 4 # 32
+
+    print("ok")
+
+    wandb_init(opt)
+
+    mlr_data_dir = opt.mlr_data_dir
+    environment_names = ["MineRLTreechop-v0"]
+
+    experiment_name = opt.name
+
+    batch_size = opt.batch_size
+    max_steps = opt.max_steps
+    output_dir = Path(opt.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # total size of a video segment to generate, e.g. 32 frames of 16x16 latent codes
+    S, H, W = opt.S, opt.H, opt.W
+
+    single_batch = opt.single_batch
+    eval_interval = opt.eval_interval
+    checkpoint_interval = opt.checkpoint_interval
+    sampling_type = opt.sampling_type
+    p_max_uniform = opt.p_max_uniform
+    num_context = opt.num_context
+    change_batch_interval = opt.change_batch_interval
 
     traj_sampler = BufferedTrajSampler(
         environment_names,
         mlr_data_dir,
-        buffer_size=buffer_size,
-        max_segment_length=1000,
+        buffer_size=opt.buffer_size,
+        max_segment_length=opt.max_segment_length,
         traj_len=S,
-        skip_frames=2,
+        skip_frames=opt.skip_frames,
     )
     noise_sampler = LossAwareSamplerEma(num_histogram_buckets=100, uniform_p=0.01, alpha=0.9, warmup=10)
     loss_fn = nn.CrossEntropyLoss(reduction="none")
@@ -268,31 +333,41 @@ def main():
     model = VqSparseDiffusionModel(
         shape=(S, H, W),
         num_classes=num_embeddings,
-        dim=dim,
-        depth=depth,
-        dim_head=dim // heads,
-        mlp_dim=mlp_dim,
-        heads=heads,
+        dim=opt.dim,
+        depth=opt.depth,
+        dim_head=opt.dim // opt.heads,
+        mlp_dim=opt.mlp_dim,
+        heads=opt.heads,
     )
     count_parameters(model)
     model.to(device)
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=opt.lr,
-        betas=(0.9, 0.999),
-        weight_decay=opt.weight_decay,
-        amsgrad=False,
-    )
+
+    if opt.optimizer == "AdamW":
+        optimizer = optim.AdamW(
+            model.parameters(),
+            lr=opt.lr,
+            betas=(0.9, 0.999),
+            weight_decay=opt.weight_decay,
+            amsgrad=False,
+        )
+    elif opt.optimizer == "Adam":
+        if opt.weight_decay > 0:
+            print('WARN: Adam with weight_decay > 0')
+        optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), weight_decay=opt.weight_decay, amsgrad=False)
+    else:
+        raise RuntimeError('Unsupported optimizer specified.')
 
     scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, max_steps)
-    if warmup > 0:
+    if opt.warmup > 0:
         lr_scheduler = GradualWarmupScheduler(
-            optimizer, multiplier=1.0, total_epoch=warmup, after_scheduler=scheduler_cosine
+            optimizer, multiplier=1.0, total_epoch=opt.warmup, after_scheduler=scheduler_cosine
         )
     else:
         lr_scheduler = scheduler_cosine
 
     decoder_model.to(device)
+
+    model_ema = ModelEmaV2(model, decay=opt.ema_decay) if opt.ema_decay > 0 else None
 
     for step in range(1, max_steps):
         model.train()
@@ -300,8 +375,12 @@ def main():
 
         r = noise_sampler.sample(batch_size).view(batch_size, 1).to(device)
 
-        indices = sample_time_dependent(batch_size, num_context, S, H, W, r, device)
-        #indices = sample_flat_positions(batch_size, num_context, S, H, W, device)
+        if sampling_type == 'uniform':
+            indices = sample_flat_positions(batch_size, num_context, S, H, W, device)
+        elif sampling_type == 'neighbors':
+            indices = sample_time_dependent(batch_size, num_context, S, H, W, r, device)
+        else:
+            raise ValueError('Specified sampling_type not supported')
         # print('indices', indices)
 
         if (not single_batch and step % change_batch_interval == 1) or step == 1:
@@ -357,32 +436,73 @@ def main():
 
         # backward
         loss.backward()
+        gn = grad_norm(model.parameters())
         optimizer.step()
         lr_scheduler.step()
 
-        if step % eval_interval == 0:
-            decoded_frames = evaluate_model(
-                device,
-                8,
-                model,
-                decoder_model,
-                shape=(S, H, W),
-                num_context=num_context,
-            )
-            img_grid = torchvision.utils.make_grid(
-                decoded_frames.view(-1, *decoded_frames.shape[2:]),
-                nrow=S,
-                pad_value=0.2,
-            )
-            combined_fn = f"combo_{step:08d}.png"
-            torchvision.utils.save_image(img_grid, combined_fn)
+        if checkpoint_interval > 0 and step % checkpoint_interval == 0:
+            # write model_checkpoint
+            fn = '{}_checkpoint_{:07d}.pth'.format(experiment_name, step)
+            fn = output_dir / fn
+            fn = str(fn)
+            print('writing file: ' + fn)
+            ema_state_dict = model_ema.module.state_dict() if model_ema is not None else None
+            torch.save({
+                'step': step,
+                'lr': lr_scheduler.get_last_lr(),
+                'model_state_dict': model.state_dict(),
+                'ema_model_state_dict': ema_state_dict,
+                'optimizer_state_dict': optimizer.state_dict(),
+                'opt': opt,
+            }, fn)
+
+        if eval_interval > 0 and step % eval_interval == 0:
+            eval_models = [('base', model)]
+            if model_ema is not None:
+                eval_models.append(('ema', model_ema.module))
+
+            for model_name, model_ in eval_models:
+                decoded_frames = evaluate_model(
+                    device,
+                    opt.eval_batch_size,
+                    model,
+                    decoder_model,
+                    shape=(S, H, W),
+                    sampling_type=sampling_type,
+                    num_context=num_context,
+                )
+                if opt.save_frames:
+                    n_frames = decoded_frames.shape[1]
+                    for i in range(n_frames):
+                       frame = decoded_frames[:,i]
+                       frame_grid = torchvision.utils.make_grid(frame)
+                       #fn = f'{experiment_name}_{step:07d}_{model_name}_frame_{i:03d}.png'
+                       fn = f'{experiment_name}_{model_name}_frame_{i:03d}.png'
+                       fn = output_dir / fn
+                       fn = str(fn)
+                       torchvision.utils.save_image(frame_grid, fn)
+
+                img_grid = torchvision.utils.make_grid(
+                    decoded_frames.view(-1, *decoded_frames.shape[2:]),
+                    nrow=S,
+                    pad_value=0.2,
+                )
+                fn = '{}_eval_{:07d}_{}.png'.format(experiment_name, step, model_name)
+                fn = output_dir / fn
+                fn = str(fn)
+                torchvision.utils.save_image(img_grid, fn)
+                images = wandb.Image(img_grid, caption='Reconstruction ' + model_name)
+                wandb.log({'reconstruction_' + model_name: images})
+
+        wandb.log({'loss': loss, 'lr': lr_scheduler.get_last_lr()[0], 'grad_norm': gn})
 
         if step % 10 == 0:
-            print(f"{step}: loss: {loss.item()}")
+            print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; warmed_up: {}'.format(step, loss, lr_scheduler.get_last_lr()[0], gn, noise_sampler.warmed_up()))
+
+        if step % 50 == 0:
+            #print('sampler.weights(): ', noise_sampler.weights())
+            wandb.log({ 'sampler_weights': wandb.Histogram(np_histogram=noise_sampler.weights_as_numpy_histogram()) })
 
 
 if __name__ == "__main__":
-    # device = torch.device('cpu')
-    # p = sample_time_dependent(4, 5, 10, 5, 5, torch.ones(4), device)
-    # print(p)
     main()
