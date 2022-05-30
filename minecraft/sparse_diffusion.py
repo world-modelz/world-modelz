@@ -440,6 +440,9 @@ def main():
         optimizer.step()
         lr_scheduler.step()
 
+        if model_ema is not None:
+            model_ema.update(model)
+
         if checkpoint_interval > 0 and step % checkpoint_interval == 0:
             # write model_checkpoint
             fn = '{}_checkpoint_{:07d}.pth'.format(experiment_name, step)
