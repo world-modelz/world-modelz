@@ -1,3 +1,4 @@
+import math
 import argparse
 from json import decoder
 import random
@@ -48,6 +49,37 @@ def sample_flat_positions(batch_size, context_length, s, h, w, device):
         p[j : j + take] = r[:take]
         j += take
     return p.view(batch_size, context_length)
+
+
+def sample_time_dependent(batch_size, context_length, s, h, w, t, device, o=None):
+    """
+    Sample positions in a neighborhood range along the time axis s dependent
+    on the diffusion time t. For smaller values of t the range of frames from
+    which positions are sampled is smaller than for larger values. As t approaches
+    1 positions are sampled more and more from the whole video segment.
+    Positions of individual frames are drawn uniformly (without replacement).
+    """
+    t = t.squeeze().clamp(0, 1).to(device)
+    assert context_length > 0
+
+    min_sample_window = math.ceil(context_length / (h*w))
+    assert min_sample_window < s
+
+    sample_window = torch.floor(min_sample_window + (t * (s - min_sample_window + 1)))
+    sample_window = sample_window.clamp(max=s - min_sample_window)
+    if o is None:
+        o = torch.rand_like(t, device=device)
+    else:
+        o = o.clamp(0, 1-1e-5).to(device)
+    offset = torch.floor(o * (s - sample_window + 1)).long()
+    sample_window = sample_window.long() * h * w
+    offset = offset * h * w
+
+    # fill batch
+    p = torch.empty(batch_size, context_length, device=device, dtype=torch.long)
+    for i in range(batch_size):
+        p[i] = torch.randperm(sample_window[i], device=device)[:context_length] + offset[i]
+    return p
 
 
 class VqSparseDiffusionModel(nn.Module):
@@ -137,14 +169,24 @@ def evaluate_model(
     for i in range(num_eval_iterations):
         max_index = S * H * W
 
-        all_indices_perm = torch.randperm(max_index, device=device).repeat(batch_size, 1)
+        #all_indices_perm = torch.randperm(max_index, device=device).repeat(batch_size, 1)
 
-        for j in range(0, max_index, num_context):
+        frac = i / (num_eval_iterations - 1)
+
+        # sample offsets
+        offset_count = max_index // num_context + 1
+        offset_order = torch.randperm(offset_count)
+
+        for k in range(offset_count):
             # sample input
-            indices = all_indices_perm[:, j : j + num_context]
+            #j = k * max_index
+            #indices = all_indices_perm[:, j : j + num_context]
+
+            o = (offset_order[k].float() / (offset_count-1)).repeat(batch_size)
+            indices = sample_time_dependent(batch_size, num_context, S, H, W, torch.ones(batch_size) * (1.0-frac), device, o=o)
+
             input = torch.gather(full_z_flat, dim=1, index=indices)
 
-            frac = i / (num_eval_iterations - 1)
             alpha = frac
             alpha = clamp(alpha, 0, 1)
             mask = torch.rand_like(input, dtype=torch.float) > alpha
@@ -189,16 +231,16 @@ def main():
     decoder_model.load_state_dict(decoder_data["model_state_dict"])
     print("ok")
 
-    mlr_data_dir = "/mnt/minerl"
+    mlr_data_dir = "/data/datasets/minerl"  # "/mnt/minerl"
     environment_names = ["MineRLTreechop-v0"]
 
-    batch_size = 128
+    batch_size = 16 # 48
     max_steps = 100000
-    warmup = 500
+    warmup = 0 # 500
     # total size of a video segment to generate, e.g. 32 frames of 16x16 latent codes
     S, H, W = 32, 16, 16
 
-    single_batch = False
+    single_batch = True # False
     eval_interval = 1000
 
     num_embeddings = decoder_model.vq.num_embeddings
@@ -209,7 +251,7 @@ def main():
     heads = 4
     depth = 8
     num_context = 512  # number of tokens to pass through the transformer at once
-    buffer_size = 75000
+    buffer_size = 5000 # 75000
     change_batch_interval = 4 # 32
 
     traj_sampler = BufferedTrajSampler(
@@ -243,9 +285,12 @@ def main():
     )
 
     scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, max_steps)
-    lr_scheduler = GradualWarmupScheduler(
-        optimizer, multiplier=1.0, total_epoch=warmup, after_scheduler=scheduler_cosine
-    )
+    if warmup > 0:
+        lr_scheduler = GradualWarmupScheduler(
+            optimizer, multiplier=1.0, total_epoch=warmup, after_scheduler=scheduler_cosine
+        )
+    else:
+        lr_scheduler = scheduler_cosine
 
     decoder_model.to(device)
 
@@ -253,7 +298,10 @@ def main():
         model.train()
         optimizer.zero_grad()
 
-        indices = sample_flat_positions(batch_size, num_context, S, H, W, device)
+        r = noise_sampler.sample(batch_size).view(batch_size, 1).to(device)
+
+        indices = sample_time_dependent(batch_size, num_context, S, H, W, r, device)
+        #indices = sample_flat_positions(batch_size, num_context, S, H, W, device)
         # print('indices', indices)
 
         if (not single_batch and step % change_batch_interval == 1) or step == 1:
@@ -284,12 +332,9 @@ def main():
         indices = indices.to(device)
         target = input.clone()
 
-        # add noise and masking
-        r = noise_sampler.sample(batch_size).view(batch_size, 1).to(device)
-
         # perturbation & masking
         threshold = r
-        mask = torch.rand(input.shape, device=device) < threshold
+        mask = torch.rand(input.shape, device=device) < threshold       # higher r -> more masking, r == 0 no masking
 
         du = torch.ones(batch_size, num_context, num_embeddings, device=device) / num_embeddings
         dt = F.one_hot(input, num_classes=num_embeddings).float().to(device)
@@ -337,4 +382,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # device = torch.device('cpu')
+    # p = sample_time_dependent(4, 5, 10, 5, 5, torch.ones(4), device)
+    # print(p)
     main()
