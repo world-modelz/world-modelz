@@ -28,6 +28,8 @@
 
 ## Video Prediction / Generation
 
+- CogVideo: [CogVideo: Large-scale Pretraining for Text-to-Video Generation via Transformers](https://raw.githubusercontent.com/THUDM/CogVideo/main/paper/CogVideo-arxiv.pdf), web: [GH page](https://github.com/THUDM/CogVideo)
+- TATS (3D VQGAN): [Long Video Generation with Time-Agnostic VQGAN and Time-Sensitive Transformer](https://arxiv.org/abs/2204.03638), web: [Website](https://songweige.github.io/projects/tats/index.html)
 - FDM: [Flexible Diffusion Modeling of Long Videos](https://arxiv.org/abs/2205.11495)
 - VDM: [Video Diffusion Models](https://arxiv.org/abs/2204.03458), web: [Website](https://video-diffusion.github.io/)
 - MSPred: [Video Prediction at Multiple Scales with Hierarchical Recurrent Networks](https://arxiv.org/abs/2203.09303), web: [Website](https://sites.google.com/view/mspred/home)
