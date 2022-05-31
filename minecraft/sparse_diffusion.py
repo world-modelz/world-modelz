@@ -1,12 +1,9 @@
-from email.policy import default
 import math
 import argparse
-from json import decoder
-from multiprocessing.sharedctypes import Value
-import random
 from pathlib import Path
 import uuid
 
+import matplotlib.pyplot as plt
 import wandb
 
 import torch
@@ -15,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 
-from train_vqae import VqAutoEncoder, wandb_init, count_parameters, show_batch
+from train_vqae import VqAutoEncoder, wandb_init, count_parameters
 from buffered_traj_sampler import BufferedTrajSampler
 from transformer import Transformer
 from importance_sampling import LossAwareSamplerEma, UniformSampler
@@ -476,7 +473,7 @@ def main():
                 decoded_frames = evaluate_model(
                     device,
                     opt.eval_batch_size,
-                    model,
+                    model_,
                     decoder_model,
                     shape=(S, H, W),
                     sampling_type=sampling_type,
@@ -518,4 +515,15 @@ def main():
 
 
 if __name__ == "__main__":
+
+    """
+    # Insepect position sampling distribution
+    device = torch.device('cpu')
+    t = torch.ones(2) * 0.25
+    positions = sample_time_dependent(2, 16*16, 100, 16, 16, t, device)
+    fig, (ax0) = plt.subplots(nrows=1, ncols=1)
+    ax0.hist(positions, 100, density=True, histtype='bar', stacked=True, range=(0,100*16*16))
+    plt.show()
+    """
+
     main()
