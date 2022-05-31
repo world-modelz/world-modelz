@@ -54,7 +54,7 @@ class UniformSampler:
 
     @torch.no_grad()
     def sample(self, batch_size):
-        return torch.rand_like(batch_size)
+        return torch.rand(batch_size)
     
     @torch.no_grad()
     def update_with_losses(self, ts, losses):
