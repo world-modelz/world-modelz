@@ -47,6 +47,26 @@ class LossAwareSamplerEma:
         return ((self.weights() / (self.weights().sum()+1e-6)).numpy(), np.arange(self.num_histogram_buckets+1) / self.num_histogram_buckets)
 
 
+class UniformSampler:
+    @torch.no_grad()
+    def weights(self):
+        return None
+
+    @torch.no_grad()
+    def sample(self, batch_size):
+        return torch.rand_like(batch_size)
+    
+    @torch.no_grad()
+    def update_with_losses(self, ts, losses):
+        pass
+
+    def warmed_up(self):
+        return True
+
+    def weights_as_numpy_histogram(self):
+        return None
+
+
 def test():
     l = LossAwareSamplerEma(100)
     l.update_with_losses(torch.rand(10000), torch.rand(10000))

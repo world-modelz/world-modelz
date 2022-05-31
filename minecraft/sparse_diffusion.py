@@ -18,7 +18,7 @@ import torchvision
 from train_vqae import VqAutoEncoder, wandb_init, count_parameters, show_batch
 from buffered_traj_sampler import BufferedTrajSampler
 from transformer import Transformer
-from importance_sampling import LossAwareSamplerEma
+from importance_sampling import LossAwareSamplerEma, UniformSampler
 from warmup_scheduler import GradualWarmupScheduler
 from model_ema_v2 import ModelEmaV2
 
@@ -240,6 +240,7 @@ def parse_args():
     parser.add_argument('--checkpoint_interval', default=25000, type=int)
     parser.add_argument("--sampling_type", default='neighbors', type=str, help='uniform|neighbors')
     parser.add_argument("--p_max_uniform", default=0.1)
+    parser.add_argument("--uniform_noise", default=False, action='store_true')
 
     # sampling
     parser.add_argument("--buffer_size", default=75000, type=int)
@@ -327,7 +328,14 @@ def main():
         traj_len=S,
         skip_frames=opt.skip_frames,
     )
-    noise_sampler = LossAwareSamplerEma(num_histogram_buckets=100, uniform_p=0.01, alpha=0.9, warmup=10)
+
+    if not opt.uniform_noise:
+        print('Loss arware noise sampling')
+        noise_sampler = LossAwareSamplerEma(num_histogram_buckets=100, uniform_p=0.01, alpha=0.9, warmup=10)
+    else:
+        print('Uniform noise sampling')
+        noise_sampler = UniformSampler()
+
     loss_fn = nn.CrossEntropyLoss(reduction="none")
 
     model = VqSparseDiffusionModel(
@@ -503,8 +511,10 @@ def main():
             print('{}: Loss: {:.3e}; lr: {:.3e}; grad_norm: {:.3e}; warmed_up: {}'.format(step, loss, lr_scheduler.get_last_lr()[0], gn, noise_sampler.warmed_up()))
 
         if step % 100 == 0:
-            #print('sampler.weights(): ', noise_sampler.weights())
-            wandb.log({ 'sampler_weights': wandb.Histogram(np_histogram=noise_sampler.weights_as_numpy_histogram()) })
+            sampler_weights_hist = noise_sampler.weights_as_numpy_histogram()
+            #print('sampler.weights(): ', sampler_weights_hist)
+            if sampler_weights_hist is not None:
+                wandb.log({ 'sampler_weights': wandb.Histogram(np_histogram=sampler_weights_hist) })
 
 
 if __name__ == "__main__":
