@@ -9,6 +9,7 @@
 - Sampled MuZero: [Learning and Planning in Complex Action Spaces](https://arxiv.org/abs/2104.06303)
 - EfficientZero: [Mastering Atari Games with Limited Data](https://arxiv.org/abs/2111.00210)
 - [Procedural Generalization by Planning with Self-Supervised World Models](https://arxiv.org/abs/2111.01587)  (planning, self-supervised learning, data diversity)
+- Director: [Deep Hierarchical Planning from Pixels](https://arxiv.org/abs/2206.04114), web: [Website](https://danijar.com/project/director/)
 - DreamerV2: [Mastering Atari with Discrete World Models](https://arxiv.org/abs/2010.02193)
 - Dreamer: [Dream to Control: Learning Behaviors by Latent Imagination](https://arxiv.org/abs/1912.01603)
 - VQM: [Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615), video: [Video](https://sites.google.com/view/vqmodels/home)
@@ -28,6 +29,7 @@
 
 ## Video Prediction / Generation
 
+- MCVD: [Masked Conditional Video Diffusion for Prediction, Generation, and Interpolation](https://arxiv.org/abs/2205.09853), web: [Website](https://mask-cond-video-diffusion.github.io/), code: [mcvd-pytorch](https://github.com/voletiv/mcvd-pytorch)
 - CogVideo: [CogVideo: Large-scale Pretraining for Text-to-Video Generation via Transformers](https://raw.githubusercontent.com/THUDM/CogVideo/main/paper/CogVideo-arxiv.pdf), web: [GH page](https://github.com/THUDM/CogVideo)
 - TATS (3D VQGAN): [Long Video Generation with Time-Agnostic VQGAN and Time-Sensitive Transformer](https://arxiv.org/abs/2204.03638), web: [Website](https://songweige.github.io/projects/tats/index.html)
 - FDM: [Flexible Diffusion Modeling of Long Videos](https://arxiv.org/abs/2205.11495)
@@ -61,6 +63,7 @@
 - VQGAN: [Taming Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2012.09841), web: [Website](https://compvis.github.io/taming-transformers/)
 - DALL-E [Zero-Shot Text-to-Image Generation](https://arxiv.org/abs/2102.12092), code: [sberbank-ai/ru-dalle](https://github.com/sberbank-ai/ru-dalle/tree/master/rudalle)
 - VQ-Diffusion: [Vector Quantized Diffusion Model for Text-to-Image Synthesis](https://arxiv.org/abs/2111.14822), code: [microsoft/VQ-Diffusion](https://github.com/microsoft/VQ-Diffusion)
+- VQ-Diffusion+: [Improved Vector Quantized Diffusion Models](https://arxiv.org/abs/2205.16007), code: [microsoft/VQ-Diffusion](https://github.com/microsoft/VQ-Diffusion)
 
 
 ## New Methods Under Investigation
@@ -71,6 +74,7 @@
 
 ## Interesting Other Stuff
 
+- LeCun's vision 2022: [Yann LeCun on a vision to make AI systems learn and reason like animals and humans](https://ai.facebook.com/blog/yann-lecun-advances-in-ai-research/), talk about the Joint Embedding Predictive Architecture (JEPA): [A Path Towards Autonomous AI](https://youtu.be/DokLw1tILlw)
 - Papers With Code: [Video Prediction](https://paperswithcode.com/task/video-prediction)
 - Blog: [World Models (the long version)](https://adgefficiency.com/world-models/)
 - Blog: [Debugging Deep Model-based Reinforcement Learning Systems](https://www.natolambert.com/writing/debugging-mbrl)
@@ -82,9 +86,13 @@
 
 ## Acknowledgements
 
-I would like to thank the following people for suggesting papers and links:
+I would like to thank the following members of the Yannic Kilcher discord server for suggesting papers and links:
+
 - eop
 - Alexander Nikolin
 - jat
 - OGeneral
 - augustocsc
+- barlowtwin
+- Lucas
+- XMaster96
